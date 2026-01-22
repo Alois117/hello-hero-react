@@ -1,15 +1,13 @@
+// Update this page (the content is just a fallback if you fail to update the page)
+
 const Index = () => {
   return (
-    <section className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center px-6">
-        <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight text-foreground mb-6">
-          Hello World
-        </h1>
-        <p className="text-lg sm:text-xl text-muted-foreground max-w-md mx-auto">
-          A simple, elegant start to something amazing.
-        </p>
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="text-center">
+        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
+        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
       </div>
-    </section>
+    </div>
   );
 };
 

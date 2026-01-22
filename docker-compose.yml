@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  avis-portal-frontend:
+    image: aloismaingi/nebula-test:latest
+    container_name: AVIS-frontend
+    ports:
+      - "80:80"
+    restart: always
