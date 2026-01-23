@@ -1,10 +1,10 @@
 import { ReactNode } from "react";
-import { Bell, Search, User, LayoutDashboard, Building2, BarChart4, Shield, CreditCard, Database, Cpu, ToggleLeft, Store, Zap } from "lucide-react";
+import { Bell, Search, LayoutDashboard, Building2, BarChart4, Shield, CreditCard, Cpu, ToggleLeft, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NavLink } from "@/components/NavLink";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getAuthUser } from "@/utils/auth";
+import { UserInfoMenu } from "@/keycloak";
 
 interface SuperAdminLayoutProps {
   children: ReactNode;
@@ -21,8 +21,6 @@ const menuItems = [
 ];
 
 const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
-  const user = getAuthUser();
-  
   return (
     <div className="min-h-screen w-full bg-background">
       {/* Sidebar */}
@@ -88,15 +86,8 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
                 <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full animate-pulse-glow" />
               </Button>
 
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-destructive/50 transition-colors cursor-pointer">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-destructive to-accent flex items-center justify-center">
-                  <User className="w-4 h-4 text-background" />
-                </div>
-                <div className="text-sm">
-                  <div className="font-medium">{user?.email || 'Super Admin'}</div>
-                  <div className="text-xs text-muted-foreground">Super Admin</div>
-                </div>
-              </div>
+              {/* Keycloak User Menu */}
+              <UserInfoMenu />
             </div>
           </div>
         </header>
