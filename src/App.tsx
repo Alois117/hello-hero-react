@@ -8,6 +8,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+// Keycloak Auth
+import { AuthProvider, ProtectedRoute } from "@/keycloak";
+
 // Public Pages
 import Login from "./pages/Login";
 import LandingPage from "./pages/landingpage/LandingPage";
@@ -21,9 +24,8 @@ import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import TermsOfUse from './pages/legal/TermsOfUse';
 
 // Shared Components
-import FloatingAIChatWrapper from "./components/ai/FloatingAIChatWrapper";;
+import FloatingAIChatWrapper from "./components/ai/FloatingAIChatWrapper";
 import CommandPalette from "./components/CommandPalette";
-import RoleBasedRoute from "./components/rbac/RoleBasedRoute";
 
 // User Pages
 import UserDashboard from "./pages/user/UserDashboard";
@@ -66,56 +68,58 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms-of-use" element={<TermsOfUse />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/2fa/setup" element={<TwoFASetup />} />
-            <Route path="/2fa/verify" element={<TwoFAVerify />} />
+          <AuthProvider>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-use" element={<TermsOfUse />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/2fa/setup" element={<TwoFASetup />} />
+              <Route path="/2fa/verify" element={<TwoFAVerify />} />
 
-            {/* User Routes */}
-            <Route path="/dashboard" element={<RoleBasedRoute requiredRole="user"><UserDashboard /></RoleBasedRoute>} />
-            <Route path="/dashboard/zabbix" element={<RoleBasedRoute requiredRole="user"><UserZabbix /></RoleBasedRoute>} />
-            <Route path="/dashboard/hosts/:id" element={<RoleBasedRoute requiredRole="user"><UserHostDetail /></RoleBasedRoute>} />
-            <Route path="/dashboard/veeam" element={<RoleBasedRoute requiredRole="user"><UserVeeam /></RoleBasedRoute>} />
-            <Route path="/dashboard/traps" element={<RoleBasedRoute requiredRole="user"><UserTraps /></RoleBasedRoute>} />
-            <Route path="/dashboard/insights" element={<RoleBasedRoute requiredRole="user"><UserInsights /></RoleBasedRoute>} />
-            <Route path="/dashboard/reports" element={<RoleBasedRoute requiredRole="user"><UserReports /></RoleBasedRoute>} />
-            <Route path="/dashboard/settings" element={<RoleBasedRoute requiredRole="user"><UserSettings /></RoleBasedRoute>} />
+              {/* User Routes */}
+              <Route path="/dashboard" element={<ProtectedRoute requiredRole="user"><UserDashboard /></ProtectedRoute>} />
+              <Route path="/dashboard/zabbix" element={<ProtectedRoute requiredRole="user"><UserZabbix /></ProtectedRoute>} />
+              <Route path="/dashboard/hosts/:id" element={<ProtectedRoute requiredRole="user"><UserHostDetail /></ProtectedRoute>} />
+              <Route path="/dashboard/veeam" element={<ProtectedRoute requiredRole="user"><UserVeeam /></ProtectedRoute>} />
+              <Route path="/dashboard/traps" element={<ProtectedRoute requiredRole="user"><UserTraps /></ProtectedRoute>} />
+              <Route path="/dashboard/insights" element={<ProtectedRoute requiredRole="user"><UserInsights /></ProtectedRoute>} />
+              <Route path="/dashboard/reports" element={<ProtectedRoute requiredRole="user"><UserReports /></ProtectedRoute>} />
+              <Route path="/dashboard/settings" element={<ProtectedRoute requiredRole="user"><UserSettings /></ProtectedRoute>} />
 
-            {/* Org Admin Routes */}
-            <Route path="/admin" element={<RoleBasedRoute requiredRole="org_admin"><OrgAdminDashboard /></RoleBasedRoute>} />
-            <Route path="/admin/users" element={<RoleBasedRoute requiredRole="org_admin"><UserManagement /></RoleBasedRoute>} />
-            <Route path="/admin/billing" element={<RoleBasedRoute requiredRole="org_admin"><Billing /></RoleBasedRoute>} />
-            <Route path="/admin/usage" element={<RoleBasedRoute requiredRole="org_admin"><UsageMeters /></RoleBasedRoute>} />
-            <Route path="/admin/alerts" element={<RoleBasedRoute requiredRole="org_admin"><AlertConfiguration /></RoleBasedRoute>} />
-            <Route path="/admin/oncall" element={<RoleBasedRoute requiredRole="org_admin"><OnCallSchedules /></RoleBasedRoute>} />
-            <Route path="/admin/zabbix-monitoring" element={<RoleBasedRoute requiredRole="org_admin"><Zabbix /></RoleBasedRoute>} />
-            <Route path="/admin/zabbix" element={<RoleBasedRoute requiredRole="org_admin"><ZabbixHosts /></RoleBasedRoute>} />
-            <Route path="/admin/maintenance" element={<RoleBasedRoute requiredRole="org_admin"><MaintenanceWindows /></RoleBasedRoute>} />
-            <Route path="/admin/ai" element={<RoleBasedRoute requiredRole="org_admin"><AISettings /></RoleBasedRoute>} />
+              {/* Org Admin Routes */}
+              <Route path="/admin" element={<ProtectedRoute requiredRole="org_admin"><OrgAdminDashboard /></ProtectedRoute>} />
+              <Route path="/admin/users" element={<ProtectedRoute requiredRole="org_admin"><UserManagement /></ProtectedRoute>} />
+              <Route path="/admin/billing" element={<ProtectedRoute requiredRole="org_admin"><Billing /></ProtectedRoute>} />
+              <Route path="/admin/usage" element={<ProtectedRoute requiredRole="org_admin"><UsageMeters /></ProtectedRoute>} />
+              <Route path="/admin/alerts" element={<ProtectedRoute requiredRole="org_admin"><AlertConfiguration /></ProtectedRoute>} />
+              <Route path="/admin/oncall" element={<ProtectedRoute requiredRole="org_admin"><OnCallSchedules /></ProtectedRoute>} />
+              <Route path="/admin/zabbix-monitoring" element={<ProtectedRoute requiredRole="org_admin"><Zabbix /></ProtectedRoute>} />
+              <Route path="/admin/zabbix" element={<ProtectedRoute requiredRole="org_admin"><ZabbixHosts /></ProtectedRoute>} />
+              <Route path="/admin/maintenance" element={<ProtectedRoute requiredRole="org_admin"><MaintenanceWindows /></ProtectedRoute>} />
+              <Route path="/admin/ai" element={<ProtectedRoute requiredRole="org_admin"><AISettings /></ProtectedRoute>} />
 
-            {/* Super Admin Routes */}
-            <Route path="/super-admin" element={<RoleBasedRoute requiredRole="super_admin"><SuperAdminDashboard /></RoleBasedRoute>} />
-            <Route path="/super-admin/organizations" element={<RoleBasedRoute requiredRole="super_admin"><Organizations /></RoleBasedRoute>} />
-            <Route path="/super-admin/analytics" element={<RoleBasedRoute requiredRole="super_admin"><GlobalAnalytics /></RoleBasedRoute>} />
-            <Route path="/super-admin/security-logs" element={<RoleBasedRoute requiredRole="super_admin"><SecurityLogs /></RoleBasedRoute>} />
-            <Route path="/super-admin/billing" element={<RoleBasedRoute requiredRole="super_admin"><MultiTenantBilling /></RoleBasedRoute>} />
-            <Route path="/super-admin/aiml" element={<RoleBasedRoute requiredRole="super_admin"><AIMLPerformance /></RoleBasedRoute>} />
-            <Route path="/super-admin/features" element={<RoleBasedRoute requiredRole="super_admin"><FeatureFlagsPage /></RoleBasedRoute>} />
-            <Route path="/super-admin/reseller" element={<RoleBasedRoute requiredRole="super_admin"><ResellerPortal /></RoleBasedRoute>} />
+              {/* Super Admin Routes */}
+              <Route path="/super-admin" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
+              <Route path="/super-admin/organizations" element={<ProtectedRoute requiredRole="super_admin"><Organizations /></ProtectedRoute>} />
+              <Route path="/super-admin/analytics" element={<ProtectedRoute requiredRole="super_admin"><GlobalAnalytics /></ProtectedRoute>} />
+              <Route path="/super-admin/security-logs" element={<ProtectedRoute requiredRole="super_admin"><SecurityLogs /></ProtectedRoute>} />
+              <Route path="/super-admin/billing" element={<ProtectedRoute requiredRole="super_admin"><MultiTenantBilling /></ProtectedRoute>} />
+              <Route path="/super-admin/aiml" element={<ProtectedRoute requiredRole="super_admin"><AIMLPerformance /></ProtectedRoute>} />
+              <Route path="/super-admin/features" element={<ProtectedRoute requiredRole="super_admin"><FeatureFlagsPage /></ProtectedRoute>} />
+              <Route path="/super-admin/reseller" element={<ProtectedRoute requiredRole="super_admin"><ResellerPortal /></ProtectedRoute>} />
 
-            {/* Fallback */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* Fallback */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
 
-          <CommandPalette />
-          <FloatingAIChatWrapper />
+            <CommandPalette />
+            <FloatingAIChatWrapper />
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

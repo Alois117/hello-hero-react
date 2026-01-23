@@ -1,10 +1,10 @@
 import { ReactNode } from "react";
-import { Bell, Search, User, LayoutDashboard, Server, AlertTriangle, Radio, Lightbulb, FileText, Settings, Shield, Zap, Database, Server as ServerIcon } from "lucide-react";
+import { Bell, Search, LayoutDashboard, Lightbulb, FileText, Settings, Shield, Zap, Database, Server as ServerIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NavLink } from "@/components/NavLink";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getAuthUser } from "@/utils/auth";
+import { UserInfoMenu } from "@/keycloak";
 
 interface UserLayoutProps {
   children: ReactNode;
@@ -20,8 +20,6 @@ const menuItems = [
 ];
 
 const UserLayout = ({ children }: UserLayoutProps) => {
-  const user = getAuthUser();
-  
   return (
     <div className="min-h-screen w-full bg-background">
       {/* Sidebar */}
@@ -87,15 +85,8 @@ const UserLayout = ({ children }: UserLayoutProps) => {
                 <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse-glow" />
               </Button>
 
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-colors cursor-pointer">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                  <User className="w-4 h-4 text-background" />
-                </div>
-                <div className="text-sm">
-                  <div className="font-medium">{user?.email || 'User'}</div>
-                  <div className="text-xs text-muted-foreground capitalize">{user?.role || 'User'}</div>
-                </div>
-              </div>
+              {/* Keycloak User Menu */}
+              <UserInfoMenu />
             </div>
           </div>
         </header>
