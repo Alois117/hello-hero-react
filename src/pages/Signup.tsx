@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Zap, Mail, Lock, User } from "lucide-react";
 import { toast } from "sonner";
-import { signUp } from "@/utils/auth";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -19,30 +18,20 @@ const Signup = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.email || !formData.password || !formData.name) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    
     if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords don't match!");
+      toast.error("Passwords do not match");
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (formData.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
-    const { error } = await signUp(formData.email, formData.password, formData.name);
-
-    if (error) {
-      toast.error(error.message || "Signup failed");
-      return;
-    }
-
-    toast.success("Account created! Please log in.");
-    navigate("/login");
+    // Mock signup
+    localStorage.setItem("nebula_auth", "true");
+    toast.success("Account created successfully!");
+    navigate("/");
   };
 
   return (
@@ -75,7 +64,7 @@ const Signup = () => {
             <Zap className="w-6 h-6 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-glow-primary">Jarvis</h1>
+            <h1 className="text-3xl font-bold text-glow-primary">Avis</h1>
             <p className="text-xs text-muted-foreground">AI Monitoring Platform</p>
           </div>
         </div>
@@ -130,7 +119,7 @@ const Signup = () => {
               required
               className="glass-input"
             />
-            <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
           </div>
 
           <div className="space-y-2">

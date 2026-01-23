@@ -1,65 +1,66 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { AlertTriangle } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-const data = [
-  { name: "CRITICAL", value: 3, color: "hsl(var(--destructive))" },
-  { name: "HIGH", value: 8, color: "hsl(var(--accent))" },
-  { name: "WARNING", value: 12, color: "hsl(var(--warning))" },
-  { name: "INFO", value: 5, color: "hsl(var(--primary))" },
+const mockData = [
+  { severity: "Info", count: 45, color: "hsl(var(--muted-foreground))" },
+  { severity: "Warning", count: 23, color: "hsl(var(--warning))" },
+  { severity: "Average", count: 18, color: "hsl(var(--accent))" },
+  { severity: "High", count: 12, color: "hsl(var(--destructive))" },
+  { severity: "Disaster", count: 3, color: "hsl(var(--destructive))" },
 ];
 
-import { memo } from "react";
-
-const SeverityDistributionChart = memo(() => {
+const SeverityDistributionChart = () => {
   return (
-    <div className="cyber-card">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-xl font-bold mb-1">Severity Distribution</h3>
-          <p className="text-sm text-muted-foreground">Alert breakdown by severity</p>
-        </div>
-        <AlertTriangle className="w-5 h-5 text-accent" />
+    <Card className="cyber-card p-6 bg-card/50 backdrop-blur border-border/50">
+      <div className="mb-6">
+        <h3 className="text-xl font-bold mb-1">Severity Distribution</h3>
+        <p className="text-sm text-muted-foreground">Alerts by severity level (Last 24h)</p>
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-            outerRadius={100}
-            fill="#8884d8"
-            dataKey="value"
-          >
-            {data.map((entry, index) => (
+        <BarChart data={mockData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+          <XAxis 
+            dataKey="severity" 
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+          />
+          <YAxis 
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: "8px",
+              color: "hsl(var(--foreground))",
+            }}
+            cursor={{ fill: "hsl(var(--surface) / 0.3)" }}
+          />
+          <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+            {mockData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color} />
             ))}
-          </Pie>
-          <Tooltip />
-          <Legend />
-        </PieChart>
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
 
-      <div className="grid grid-cols-2 gap-4 mt-4">
-        {data.map((item) => (
-          <div key={item.name} className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
+      <div className="mt-4 flex flex-wrap gap-3 justify-center">
+        {mockData.map((item) => (
+          <div key={item.severity} className="flex items-center gap-2">
+            <div 
+              className="w-3 h-3 rounded-sm" 
               style={{ backgroundColor: item.color }}
             />
-            <span className="text-sm">
-              <span className="font-medium">{item.value}</span>{" "}
-              <span className="text-muted-foreground">{item.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {item.severity}: <span className="font-medium text-foreground">{item.count}</span>
             </span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
-});
-
-SeverityDistributionChart.displayName = "SeverityDistributionChart";
+};
 
 export default SeverityDistributionChart;

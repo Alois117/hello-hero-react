@@ -1,7 +1,8 @@
 node_modules
-dist
 .git
 .gitignore
 Dockerfile
 docker-compose.yml
+dist
+npm-debug.log
 .env

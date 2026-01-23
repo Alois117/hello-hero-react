@@ -115,7 +115,7 @@ const PrivacyPolicy = () => {
         </section>
 
         <div className="mt-8 border-t border-border/50 pt-4 text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Sentramind Limited. All rights reserved.
+          © {new Date().getFullYear()} Avis. All rights reserved.
         </div>
       </div>
     </div>

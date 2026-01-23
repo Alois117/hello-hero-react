@@ -1,21 +1,35 @@
 // Super Admin Only - Reseller Management Portal
+import { useState } from "react";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Store, Users, DollarSign, TrendingUp } from "lucide-react";
+import TablePagination from "@/components/ui/table-pagination";
 
 const ResellerPortal = () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const resellers = [
     { id: 1, name: "TechPartners Inc", tier: "Platinum", clients: 24, revenue: 45890, commission: 15 },
     { id: 2, name: "CloudSolutions LLC", tier: "Gold", clients: 18, revenue: 32450, commission: 12 },
     { id: 3, name: "MSP Global", tier: "Platinum", clients: 31, revenue: 58200, commission: 15 },
     { id: 4, name: "IT Services Pro", tier: "Silver", clients: 9, revenue: 14300, commission: 10 },
+    { id: 5, name: "NetWorks Plus", tier: "Gold", clients: 22, revenue: 38700, commission: 12 },
+    { id: 6, name: "SecureTech Partners", tier: "Platinum", clients: 45, revenue: 72500, commission: 15 },
+    { id: 7, name: "CloudFirst MSP", tier: "Silver", clients: 12, revenue: 19800, commission: 10 },
+    { id: 8, name: "Enterprise Solutions Co", tier: "Gold", clients: 28, revenue: 41200, commission: 12 },
   ];
 
   const totalRevenue = resellers.reduce((sum, r) => sum + r.revenue, 0);
   const totalClients = resellers.reduce((sum, r) => sum + r.clients, 0);
+
+  const totalPages = Math.ceil(resellers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentResellers = resellers.slice(startIndex, endIndex);
 
   return (
     <SuperAdminLayout>
@@ -69,7 +83,7 @@ const ResellerPortal = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {resellers.map((reseller) => (
+              {currentResellers.map((reseller) => (
                 <TableRow key={reseller.id}>
                   <TableCell className="font-medium">{reseller.name}</TableCell>
                   <TableCell>
@@ -90,6 +104,16 @@ const ResellerPortal = () => {
               ))}
             </TableBody>
           </Table>
+          
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={resellers.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            itemName="resellers"
+            onPageChange={setCurrentPage}
+          />
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

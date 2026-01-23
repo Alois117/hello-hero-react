@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Zap, Mail, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { resetPasswordForEmail } from "@/utils/auth";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -14,20 +13,11 @@ const ForgotPassword = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email) {
-      toast.error("Please enter your email");
-      return;
-    }
-
-    const { error } = await resetPasswordForEmail(email);
-
-    if (error) {
-      toast.error(error.message || "Failed to send reset link");
-      return;
-    }
-
-    setSent(true);
-    toast.success("Password reset link sent to your email");
+    // Mock password reset email
+    setTimeout(() => {
+      setSent(true);
+      toast.success("Password reset link sent to your email");
+    }, 1000);
   };
 
   return (

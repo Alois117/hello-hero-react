@@ -18,8 +18,8 @@ const menuItems = [
   { icon: Radio, label: "Traps", path: "/traps" },
   { icon: Lightbulb, label: "Insights", path: "/insights" },
   { icon: FileText, label: "Reports", path: "/reports" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-  { icon: Shield, label: "Admin Panel", path: "/admin/org" },
+    { icon: Settings, label: "Settings", path: "/settings" },
+    { icon: Shield, label: "Admin Panel", path: "/admin/org" },
 ];
 
 const Sidebar = () => {

@@ -12,9 +12,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
+import TablePagination from "@/components/ui/table-pagination";
 
 const SecurityLogs = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const stats = [
     { label: "Total Events", value: "1,247", icon: Shield, color: "text-primary" },
@@ -69,6 +72,33 @@ const SecurityLogs = () => {
       severity: "High",
       details: "Unusual access pattern detected"
     },
+    {
+      id: 6,
+      timestamp: "2024-12-15 13:30:18",
+      event: "Password Reset",
+      user: "john.doe@company.com",
+      ip: "10.0.0.25",
+      severity: "Low",
+      details: "Password reset requested and completed"
+    },
+    {
+      id: 7,
+      timestamp: "2024-12-15 13:15:42",
+      event: "Failed Login Attempt",
+      user: "brute@attacker.com",
+      ip: "185.220.101.45",
+      severity: "High",
+      details: "Brute force attack detected and blocked"
+    },
+    {
+      id: 8,
+      timestamp: "2024-12-15 12:58:33",
+      event: "New Device Login",
+      user: "manager@company.com",
+      ip: "172.16.0.50",
+      severity: "Medium",
+      details: "Login from unrecognized device"
+    },
   ];
 
   const filteredEvents = securityEvents.filter(event =>
@@ -76,6 +106,17 @@ const SecurityLogs = () => {
     event.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
     event.ip.includes(searchQuery)
   );
+
+  // Reset to page 1 when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentEvents = filteredEvents.slice(startIndex, endIndex);
 
   return (
     <SuperAdminLayout>
@@ -112,7 +153,7 @@ const SecurityLogs = () => {
             <Input
               placeholder="Search security events..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 glass-input"
             />
           </div>
@@ -137,7 +178,7 @@ const SecurityLogs = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEvents.map((event) => (
+                {currentEvents.map((event) => (
                   <TableRow key={event.id} className="border-border hover:bg-muted/50">
                     <TableCell className="font-mono text-sm">{event.timestamp}</TableCell>
                     <TableCell className="font-medium">{event.event}</TableCell>
@@ -161,6 +202,16 @@ const SecurityLogs = () => {
                 ))}
               </TableBody>
             </Table>
+            
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredEvents.length}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              itemName="events"
+              onPageChange={setCurrentPage}
+            />
           </CardContent>
         </Card>
       </div>

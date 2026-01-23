@@ -6,7 +6,7 @@ import { Search, LayoutDashboard, Server, AlertTriangle, Radio, Lightbulb, FileT
 const commands = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/" },
   { id: "hosts", label: "Hosts", icon: Server, path: "/hosts" },
-  { id: "alerts", label: "Alerts", icon: AlertTriangle, path: "/alerts" },
+  { id: "problems", label: "Problems", icon: AlertTriangle, path: "/problems" },
   { id: "traps", label: "Traps", icon: Radio, path: "/traps" },
   { id: "insights", label: "Insights", icon: Lightbulb, path: "/insights" },
   { id: "reports", label: "Reports", icon: FileText, path: "/reports" },

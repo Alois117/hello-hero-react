@@ -1,109 +1,125 @@
-import { X, AlertTriangle, ExternalLink, CheckCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import SeverityBadge, { AlertSeverity } from "@/components/alerts/SeverityBadge";
+import { Card } from "@/components/ui/card";
+import { AlertTriangle, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import SeverityBadge from "@/components/alerts/SeverityBadge";
+
+type Severity = "disaster" | "critical" | "high" | "average" | "warning" | "info";
 
 interface CriticalIssue {
-  id: number;
-  severity: AlertSeverity;
+  id: string;
   host: string;
   problem: string;
-  timestamp: string;
+  severity: Severity;
+  duration: string;
+  acknowledged: boolean;
 }
 
-const mockIssues: CriticalIssue[] = [
+const mockCriticalIssues: CriticalIssue[] = [
   {
-    id: 1,
-    severity: "critical",
-    host: "api-gateway-01",
-    problem: "Disk space critical - 95% full",
-    timestamp: "5m ago",
+    id: "1",
+    host: "db-master-02",
+    problem: "Disk space critical on /data partition",
+    severity: "disaster",
+    duration: "5m",
+    acknowledged: false,
   },
   {
-    id: 2,
-    severity: "high",
+    id: "2",
     host: "prod-web-01",
-    problem: "High CPU usage detected - 92%",
-    timestamp: "12m ago",
+    problem: "High CPU usage detected - 95% utilization",
+    severity: "high",
+    duration: "12m",
+    acknowledged: false,
   },
   {
-    id: 3,
+    id: "3",
+    host: "api-gateway-01",
+    problem: "Response time elevated above threshold",
     severity: "high",
-    host: "db-master-01",
-    problem: "Slow query performance detected",
-    timestamp: "18m ago",
+    duration: "18m",
+    acknowledged: true,
+  },
+  {
+    id: "4",
+    host: "backup-server-01",
+    problem: "Backup job failed - retry in progress",
+    severity: "high",
+    duration: "25m",
+    acknowledged: false,
   },
 ];
 
-import { memo } from "react";
+const CriticalIssuesPanel = () => {
+  const navigate = useNavigate();
 
-const CriticalIssuesPanel = memo(() => {
-  if (mockIssues.length === 0) {
-    return (
-      <div className="cyber-card">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold mb-1">Critical Issues</h3>
-            <p className="text-sm text-muted-foreground">High/Critical alerts today</p>
-          </div>
-          <AlertTriangle className="w-5 h-5 text-accent" />
-        </div>
-        <div className="flex flex-col items-center justify-center py-12">
-          <CheckCircle className="w-12 h-12 text-success mb-3" />
-          <p className="text-lg font-semibold mb-1">No Critical Issues</p>
-          <p className="text-sm text-muted-foreground">All systems running smoothly</p>
-        </div>
-      </div>
-    );
-  }
+  const handleIssueClick = (issueId: string) => {
+    navigate(`/dashboard/alerts?id=${issueId}`);
+  };
 
   return (
-    <div className="cyber-card">
+    <Card className="cyber-card p-6 bg-card/50 backdrop-blur border-border/50 border-l-4 border-l-destructive">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-xl font-bold mb-1">Critical Issues</h3>
-          <p className="text-sm text-muted-foreground">
-            {mockIssues.length} high/critical alerts today
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-destructive/20 flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-destructive" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold">Today's Critical Issues</h3>
+            <p className="text-sm text-muted-foreground">
+              {mockCriticalIssues.filter(i => !i.acknowledged).length} unacknowledged
+            </p>
+          </div>
         </div>
-        <AlertTriangle className="w-5 h-5 text-accent" />
+        <button
+          onClick={() => navigate("/dashboard/alerts?severity=high,disaster")}
+          className="text-sm text-primary hover:underline flex items-center gap-1"
+        >
+          View All
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="space-y-3">
-        {mockIssues.map((issue) => (
+        {mockCriticalIssues.map((issue) => (
           <div
             key={issue.id}
-            className="p-4 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-all cursor-pointer group"
+            className={`p-4 rounded-lg border transition-all cursor-pointer group ${
+              issue.acknowledged
+                ? "bg-surface/30 border-border/30 opacity-70"
+                : "bg-surface/50 border-border/50 hover:border-primary/50"
+            }`}
+            onClick={() => handleIssueClick(issue.id)}
           >
-            <div className="flex items-start gap-3">
-              <SeverityBadge severity={issue.severity} className="mt-1" />
+            <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline">{issue.host}</Badge>
-                  <span className="text-xs text-muted-foreground">{issue.timestamp}</span>
+                <div className="flex items-center gap-2 mb-2">
+                  <SeverityBadge severity={issue.severity} />
+                  <span className="text-xs text-muted-foreground">{issue.duration}</span>
+                  {issue.acknowledged && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success">
+                      Acknowledged
+                    </span>
+                  )}
                 </div>
-                <p className="text-sm font-medium mb-3">{issue.problem}</p>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <span className="text-xs">Open Detail</span>
-                  <ExternalLink className="w-3 h-3" />
-                </Button>
+                <p className="font-medium text-sm mb-1 truncate">{issue.problem}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Host: <span className="font-mono">{issue.host}</span>
+                </p>
               </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0 mt-1" />
             </div>
           </div>
         ))}
       </div>
 
-      <Button variant="outline" className="w-full mt-4">
-        View All Alerts
-      </Button>
-    </div>
+      {mockCriticalIssues.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No critical issues today</p>
+          <p className="text-sm text-success mt-1">All systems operational</p>
+        </div>
+      )}
+    </Card>
   );
-});
-
-CriticalIssuesPanel.displayName = "CriticalIssuesPanel";
+};
 
 export default CriticalIssuesPanel;

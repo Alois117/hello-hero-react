@@ -1,20 +1,33 @@
 // Super Admin Only - Multi-Tenant Billing Management
+import { useState } from "react";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DollarSign, TrendingUp } from "lucide-react";
+import TablePagination from "@/components/ui/table-pagination";
 
 const MultiTenantBilling = () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const billingData = [
     { org: "Acme Corp", plan: "Enterprise", mrr: 2499, status: "active", hosts: 142 },
     { org: "TechStart Inc", plan: "Professional", mrr: 799, status: "active", hosts: 45 },
     { org: "Global Systems", plan: "Enterprise", mrr: 4999, status: "active", hosts: 890 },
     { org: "StartupXYZ", plan: "Starter", mrr: 299, status: "trial", hosts: 12 },
     { org: "MegaCorp Ltd", plan: "Enterprise", mrr: 3999, status: "active", hosts: 567 },
+    { org: "DataFlow Inc", plan: "Professional", mrr: 899, status: "active", hosts: 78 },
+    { org: "CloudNine Systems", plan: "Enterprise", mrr: 5499, status: "active", hosts: 1200 },
+    { org: "InnovateTech", plan: "Starter", mrr: 399, status: "trial", hosts: 25 },
   ];
 
   const totalMRR = billingData.reduce((sum, org) => sum + org.mrr, 0);
+
+  const totalPages = Math.ceil(billingData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentBillingData = billingData.slice(startIndex, endIndex);
 
   return (
     <SuperAdminLayout>
@@ -64,7 +77,7 @@ const MultiTenantBilling = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {billingData.map((org, idx) => (
+              {currentBillingData.map((org, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="font-medium">{org.org}</TableCell>
                   <TableCell>{org.plan}</TableCell>
@@ -79,6 +92,16 @@ const MultiTenantBilling = () => {
               ))}
             </TableBody>
           </Table>
+          
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={billingData.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            itemName="organizations"
+            onPageChange={setCurrentPage}
+          />
         </Card>
       </div>
     </SuperAdminLayout>

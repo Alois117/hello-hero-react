@@ -18,9 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import OrgAdminLayout from "@/layouts/OrgAdminLayout";
+import TablePagination from "@/components/ui/table-pagination";
 
 const UserManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const users = [
     { id: 1, name: "Sarah Chen", email: "sarah.chen@company.com", role: "Admin", status: "Active", lastActive: "2 min ago" },
@@ -28,12 +31,26 @@ const UserManagement = () => {
     { id: 3, name: "Alex Kim", email: "alex.kim@company.com", role: "Admin", status: "Active", lastActive: "3 hours ago" },
     { id: 4, name: "Emma Wilson", email: "emma.w@company.com", role: "User", status: "Inactive", lastActive: "2 days ago" },
     { id: 5, name: "James Brown", email: "james.b@company.com", role: "User", status: "Active", lastActive: "5 min ago" },
+    { id: 6, name: "Lisa Park", email: "lisa.park@company.com", role: "Admin", status: "Active", lastActive: "30 min ago" },
+    { id: 7, name: "David Lee", email: "david.lee@company.com", role: "User", status: "Active", lastActive: "1 day ago" },
+    { id: 8, name: "Rachel Green", email: "rachel.g@company.com", role: "User", status: "Inactive", lastActive: "1 week ago" },
   ];
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Reset to page 1 when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentUsers = filteredUsers.slice(startIndex, endIndex);
 
   return (
     <OrgAdminLayout>
@@ -56,7 +73,7 @@ const UserManagement = () => {
             <Input
               placeholder="Search users..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 glass-input"
             />
           </div>
@@ -80,7 +97,7 @@ const UserManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user) => (
+              {currentUsers.map((user) => (
                 <TableRow key={user.id} className="border-border hover:bg-muted/50">
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
@@ -130,6 +147,16 @@ const UserManagement = () => {
               ))}
             </TableBody>
           </Table>
+          
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredUsers.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            itemName="users"
+            onPageChange={setCurrentPage}
+          />
         </div>
       </div>
     </OrgAdminLayout>

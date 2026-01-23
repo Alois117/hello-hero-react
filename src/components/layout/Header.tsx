@@ -10,14 +10,16 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useKeycloakAuth } from "@/auth/useKeycloakAuth";
+import { clearAuth, getAuthUser } from "@/utils/auth";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
-  const { user, logout, isAuthenticated } = useKeycloakAuth();
+  const navigate = useNavigate();
+  const user = getAuthUser();
 
   const handleLogout = () => {
-    console.log('[Header] Logging out user:', user?.email);
-    logout();
+    clearAuth();
+    navigate("/login");
   };
 
   return (
@@ -28,7 +30,7 @@ const Header = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Search hosts, alerts, insights..."
+              placeholder="Search hosts, problems, insights..."
               className="pl-10 bg-surface/50 border-border/50 focus:border-primary transition-all w-full"
             />
           </div>
@@ -45,41 +47,29 @@ const Header = () => {
           </Button>
 
           {/* User Menu */}
-          {isAuthenticated && user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-colors cursor-pointer">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                    <User className="w-4 h-4 text-background" />
-                  </div>
-                  <div className="text-sm">
-                    <div className="font-medium">{user.name || user.email}</div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {user.role?.replace("_", " ") || "User"}
-                    </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-colors cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                  <User className="w-4 h-4 text-background" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">{user?.email || "User"}</div>
+                  <div className="text-xs text-muted-foreground capitalize">
+                    {user?.role?.replace("_", " ") || "User"}
                   </div>
                 </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">{user.name || user.email}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
-                    {user.organizationId && (
-                      <p className="text-xs text-muted-foreground">
-                        Org: {user.organizationId}
-                      </p>
-                    )}
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

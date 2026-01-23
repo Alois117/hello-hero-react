@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, ArrowLeft, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { updatePassword } from "@/utils/auth";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -17,35 +18,34 @@ const ResetPassword = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (password !== confirmPassword) {
-      toast.error("Passwords don't match");
+    
+    if (!token) {
+      toast.error("Invalid reset link");
       return;
     }
 
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
     setIsLoading(true);
-
-    const { error } = await updatePassword(password);
-
-    if (error) {
-      toast.error(error.message || "Failed to reset password");
-      setIsLoading(false);
-      return;
-    }
-
-    setSuccess(true);
-    toast.success("Password reset successful!");
     
+    // Mock password reset
     setTimeout(() => {
-      navigate("/login");
-    }, 2000);
-    
-    setIsLoading(false);
+      setIsLoading(false);
+      setSuccess(true);
+      toast.success("Password reset successfully!");
+      
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+    }, 1500);
   };
 
   if (success) {
@@ -112,7 +112,7 @@ const ResetPassword = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 className="glass-input"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
 
@@ -129,7 +129,7 @@ const ResetPassword = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="glass-input"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
 

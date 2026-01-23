@@ -3,12 +3,12 @@ import { Send, Sparkles, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import ModelSelector from "./ModelSelector";
+import useJarvisAssistant from "@/hooks/useJarvisAssistant";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
-  confidence?: number;
+  confidence?: string;
 }
 
 interface ChatDrawerProps {
@@ -18,11 +18,11 @@ interface ChatDrawerProps {
 
 const ChatDrawer = ({ isOpen, onClose }: ChatDrawerProps) => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hello! I'm your AI assistant. How can I help you today?", confidence: 98 }
+    { role: "assistant", content: "Hello! I'm your AI assistant. How can I help you today?" }
   ]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { sendMessage, isLoading } = useJarvisAssistant();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,27 +33,27 @@ const ChatDrawer = ({ isOpen, onClose }: ChatDrawerProps) => {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = { role: "user", content: input };
     setMessages(prev => [...prev, userMessage]);
+    const userInput = input;
     setInput("");
-    setIsTyping(true);
 
-    setTimeout(() => {
-      const responses = [
-        "I've analyzed your system metrics. Everything looks healthy.",
-        "I recommend scaling your database servers by 20%.",
-        "I detected an anomaly in your network traffic. Want me to investigate?",
-        "Your CPU usage has decreased by 15% after optimization.",
-      ];
+    const response = await sendMessage(userInput);
 
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      const confidence = Math.floor(Math.random() * 15) + 85;
-
-      setMessages(prev => [...prev, { role: "assistant", content: randomResponse, confidence }]);
-      setIsTyping(false);
-    }, 1000);
+    if (response) {
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: response.message, 
+        confidence: response.confidence 
+      }]);
+    } else {
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: "I'm having trouble connecting right now. Please try again later." 
+      }]);
+    }
   };
 
   if (!isOpen) return null;
@@ -67,11 +67,10 @@ const ChatDrawer = ({ isOpen, onClose }: ChatDrawerProps) => {
             <Sparkles className="w-4 h-4 text-primary glow-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-sm">AI Assistant</h3>
-            <p className="text-xs text-muted-foreground">Jarvis AI</p>
+            <h3 className="font-semibold text-sm">Jarvis AI</h3>
+            <p className="text-xs text-muted-foreground">Your AI Assistant</p>
           </div>
         </div>
-        <ModelSelector />
       </div>
 
       {/* Messages */}
@@ -84,14 +83,14 @@ const ChatDrawer = ({ isOpen, onClose }: ChatDrawerProps) => {
               {message.role === "assistant" && message.confidence && (
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Bot className="w-3.5 h-3.5 text-primary" />
-                  <Badge variant="outline" className="text-xs">{message.confidence}% confident</Badge>
+                  <Badge variant="outline" className="text-xs">{message.confidence}</Badge>
                 </div>
               )}
               <p className="leading-relaxed">{message.content}</p>
             </div>
           </div>
         ))}
-        {isTyping && (
+        {isLoading && (
           <div className="flex justify-start animate-fade-in">
             <div className="glass-card p-3 rounded-lg border border-border">
               <div className="flex gap-1.5">
@@ -113,8 +112,9 @@ const ChatDrawer = ({ isOpen, onClose }: ChatDrawerProps) => {
           onKeyPress={(e) => e.key === "Enter" && handleSend()}
           placeholder="Ask me anything..."
           className="glass-input text-sm flex-1"
+          disabled={isLoading}
         />
-        <Button onClick={handleSend} className="neon-button px-3 py-2">
+        <Button onClick={handleSend} className="neon-button px-3 py-2" disabled={isLoading}>
           <Send className="w-4 h-4" />
         </Button>
       </div>

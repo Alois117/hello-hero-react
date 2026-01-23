@@ -1,29 +1,10 @@
 import { ReactNode } from "react";
-import { Bell, Search, User, LayoutDashboard, Users, CreditCard, BarChart3, AlertCircle, Clock, Server as ServerIcon, Wrench, Brain, Shield, Zap, LogOut } from "lucide-react";
+import { Bell, Search, User, LayoutDashboard, Users, CreditCard, BarChart3, AlertCircle, Clock, Server as ServerIcon, Wrench, Brain, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NavLink } from "@/components/NavLink";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useKeycloakAuth } from "@/auth/useKeycloakAuth";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { getAuthUser } from "@/utils/auth";
 
 interface OrgAdminLayoutProps {
   children: ReactNode;
@@ -34,15 +15,13 @@ const menuItems = [
   { icon: Users, label: "User Management", path: "/admin/users" },
   { icon: CreditCard, label: "Billing", path: "/admin/billing" },
   { icon: BarChart3, label: "Usage Meters", path: "/admin/usage" },
-  { icon: AlertCircle, label: "Alerts Config", path: "/admin/alerts" },
   { icon: Clock, label: "On-Call", path: "/admin/oncall" },
-  { icon: ServerIcon, label: "Zabbix Hosts", path: "/admin/zabbix" },
+  { icon: ServerIcon, label: "Zabbix", path: "/admin/zabbix-monitoring" },
   { icon: Wrench, label: "Maintenance", path: "/admin/maintenance" },
-  { icon: Brain, label: "AI Settings", path: "/admin/ai" },
 ];
 
 const OrgAdminLayout = ({ children }: OrgAdminLayoutProps) => {
-  const { user, logout, isAuthenticated } = useKeycloakAuth();
+  const user = getAuthUser();
   
   return (
     <div className="min-h-screen w-full bg-background">
@@ -56,8 +35,8 @@ const OrgAdminLayout = ({ children }: OrgAdminLayoutProps) => {
               <Zap className="w-4 h-4 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Jarvis
+              <h1 className="text-xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
+                Avis
               </h1>
               <p className="text-xs text-muted-foreground">AI Monitoring</p>
             </div>
@@ -109,55 +88,15 @@ const OrgAdminLayout = ({ children }: OrgAdminLayoutProps) => {
                 <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse-glow" />
               </Button>
 
-              {isAuthenticated && user && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-accent/50 transition-colors cursor-pointer">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-                        <User className="w-4 h-4 text-background" />
-                      </div>
-                      <div className="text-sm">
-                        <div className="font-medium">{user.name || user.email}</div>
-                        <div className="text-xs text-muted-foreground">Org Admin</div>
-                      </div>
-                    </div>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium">{user.name || user.email}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                        {user.organizationId && (
-                          <p className="text-xs text-muted-foreground">Org: {user.organizationId}</p>
-                        )}
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={(e) => e.preventDefault()}>
-                          <LogOut className="w-4 h-4 mr-2" />
-                          Sign out
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            You will be signed out of your current session.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => logout()}>
-                            Yes
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface/50 border border-border/50 hover:border-accent/50 transition-colors cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center">
+                  <User className="w-4 h-4 text-background" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">{user?.email || 'Admin'}</div>
+                  <div className="text-xs text-muted-foreground">Org Admin</div>
+                </div>
+              </div>
             </div>
           </div>
         </header>

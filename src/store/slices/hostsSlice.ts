@@ -31,7 +31,7 @@ const initialState: HostsState = {
   lastUpdated: null,
 };
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/zabbix/host-details";
+const WEBHOOK_URL = "http://10.100.12.54:5678/webhook/zabbix/host-details";
 
 // 🔁 Normalize API host to UI-safe host
 const transformHost = (raw: any): Host => {

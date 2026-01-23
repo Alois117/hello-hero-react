@@ -15,20 +15,20 @@ const Hosts = () => {
 
   const mappedHosts = hosts.map((host) => ({
     id: host.hostid,
-    name: host.hostname,
+    name: host.name || host.host,
     ip: host.ip || "—",
     status: "healthy",
-    cpu: host.cpu_usage ?? 0,
-    memory: host.memory_usage ?? 0,
-    uptime: host.uptime_days,
-    group: host.hostgroup,
+    cpu: 0,
+    memory: 0,
+    uptime: "—",
+    group: Array.isArray(host.hostgroups) ? host.hostgroups.join(", ") : (host.hostgroups || "Uncategorized"),
   }));
 
-  const groups = Array.from(new Set(hosts.flatMap(h => h.hostgroups || [])));
+  const groups = Array.from(new Set(mappedHosts.map(h => h.group)));
   
   const filteredHosts = mappedHosts.filter(host => {
-    const matchesSearch = host.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGroup = !selectedGroup || host.group.includes(selectedGroup);
+    const matchesSearch = (host.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesGroup = !selectedGroup || host.group === selectedGroup;
     return matchesSearch && matchesGroup;
   });
 

@@ -8,7 +8,7 @@
 
 @layer base {
   :root {
-    /* Core Cyberpunk Colors - HSL */
+    /* Core Cyberpunk Colors - HSL (Dark Theme) */
     --background: 229 58% 10%;
     --foreground: 0 0% 100%;
     
@@ -73,6 +73,60 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 230 30% 18%;
     --sidebar-ring: 185 100% 50%;
+  }
+
+  /* White/Light Theme for Dashboards */
+  .theme-light {
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 185 100% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 185 100% 42%;
+    
+    --secondary: 257 76% 60%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --accent: 340 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    
+    --success: 152 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 41 96% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --surface: 210 20% 96%;
+    --glass: 0 0% 0%;
+    --glass-opacity: 0.02;
+    
+    --text-primary: 222 47% 11%;
+    --text-secondary: 215 16% 47%;
+    
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 47%;
+    
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 185 100% 42%;
+    
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 185 100% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 185 100% 42%;
   }
 }
 

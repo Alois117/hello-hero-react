@@ -159,7 +159,7 @@ const Footer = () => {
             Made with <FiHeart className="text-[#FAA41E] w-4 h-4 animate-pulse" /> by the Avis Team
           </p>
 
-          <p>© {new Date().getFullYear()} Sentramind Limited. All rights reserved.</p> {/* Updated to Sentramind */}
+          <p>© {new Date().getFullYear()} Avis. All rights reserved.</p> {/* Updated to Sentramind */}
         </motion.div>
 
         {/* Decorative bottom line */}

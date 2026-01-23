@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 
-import UserLayout from "@/layouts/UserLayout";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -21,18 +20,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import { HardDrive, RefreshCw, Search, TriangleAlert } from "lucide-react";
+  HardDrive,
+  Search,
+  TriangleAlert,
+  Shield,
+  ShieldOff,
+  Briefcase,
+  Clock,
+  Bell,
+  Plus,
+  Pencil,
+  Power,
+  PowerOff,
+  Server,
+  AlertCircle,
+  Copy,
+  Database,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 
-import type { Job, MatchedVm } from "@/pages/user/backup-replication/types";
-import JobsTable from "@/pages/user/backup-replication/components/JobsTable";
+import type { Job, MatchedVm, UnprotectedVm, OrphanJob, MultiVmJob, Replica, ChangedJob } from "@/pages/user/backup-replication/types";
+import { formatDateTime } from "@/pages/user/backup-replication/utils/format";
+import { usePagination } from "@/pages/user/backup-replication/hooks/usePagination";
+import StatusBadge from "@/pages/user/backup-replication/components/shared/StatusBadge";
+import TablePagination from "@/pages/user/backup-replication/components/shared/TablePagination";
+import VmDrawer from "@/pages/user/backup-replication/components/VmDrawer";
 import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetailDrawer";
+import ChangeActivityDrawer from "@/pages/user/backup-replication/components/ChangeActivityDrawer";
 
 const ENDPOINT = "http://10.100.12.54:5678/webhook/backupandreplication";
 
@@ -43,10 +58,10 @@ type MainObject = {
   matched?: MatchedVm[];
   alerts?: any;
   statistics?: any;
-  vmsWithoutJobs?: any;
-  jobsWithoutVMs?: any;
-  multiVMJobs?: any;
-  replicas?: any;
+  vmsWithoutJobs?: UnprotectedVm[];
+  jobsWithoutVMs?: OrphanJob[];
+  multiVMJobs?: MultiVmJob[];
+  replicas?: Replica[];
 };
 
 type MetaObject = {
@@ -77,54 +92,121 @@ function formatCount(v: unknown) {
   return Number.isFinite(n) ? n.toLocaleString() : "—";
 }
 
-function statusBadgeTone(kind: "success" | "warning" | "danger" | "info") {
-  // Use semantic tokens only; these map to the existing design system.
-  if (kind === "success") return "bg-success/10 border border-success/25 text-success";
-  if (kind === "warning") return "bg-warning/10 border border-warning/25 text-warning";
-  if (kind === "danger") return "bg-destructive/10 border border-destructive/25 text-destructive";
-  return "bg-primary/10 border border-primary/25 text-primary";
-}
+// ================== Summary Card Components ==================
 
-function SummaryCard({
-  title,
-  value,
-  tone,
-}: {
+interface SummaryCardProps {
   title: string;
   value: string | number;
-  tone: "success" | "warning" | "danger" | "info";
-}) {
+  icon: React.ComponentType<{ className?: string }>;
+  variant: "info" | "success" | "warning" | "danger";
+  onClick?: () => void;
+}
+
+function SummaryCard({ title, value, icon: Icon, variant, onClick }: SummaryCardProps) {
+  const iconClasses = {
+    info: "text-primary bg-primary/10",
+    success: "text-emerald-500 bg-emerald-500/10",
+    warning: "text-amber-500 bg-amber-500/10",
+    danger: "text-destructive bg-destructive/10",
+  };
+
   return (
-    <Card className="glass-card p-5 rounded-lg border border-border hover:border-primary/30 transition-all hover-lift">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="text-sm text-muted-foreground">{title}</div>
-          <div className="text-2xl font-bold tracking-tight">{value}</div>
-        </div>
-        <div className={`p-2 rounded-lg ${statusBadgeTone(tone)}`} aria-hidden="true">
-          <HardDrive className="w-5 h-5" />
-        </div>
+    <Card
+      onClick={onClick}
+      className={`
+        px-4 py-3
+        rounded-lg
+        border ${variant ? `border-${variant}/30 hover:border-${variant}/50` : "border-primary/30 hover:border-primary/50"}
+        cursor-pointer
+        transition-all
+        hover:shadow-md
+        flex flex-col items-center text-center
+      `}
+    >
+      <div className={`mb-2 p-2 rounded-md ${iconClasses[variant]}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">
+        {title}
+      </div>
+      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
+        {value}
       </div>
     </Card>
   );
 }
 
+interface ChangeSummaryCardProps {
+  newJobs: number;
+  modifiedJobs: number;
+  enabledJobs: number;
+  disabledJobs: number;
+  onClick: () => void;
+}
+
+function ChangeSummaryCard({
+  newJobs,
+  modifiedJobs,
+  enabledJobs,
+  disabledJobs,
+  onClick,
+}: ChangeSummaryCardProps) {
+  const total = newJobs + modifiedJobs + enabledJobs + disabledJobs;
+
+  return (
+    <Card
+      onClick={onClick}
+      className="
+        px-4 py-3
+        rounded-lg
+        border border-primary/30
+        hover:border-primary/50
+        cursor-pointer
+        transition-all
+        hover:shadow-md
+        flex flex-col items-center text-center
+      "
+    >
+      <div className="mb-2 p-2 rounded-md bg-primary/10 text-primary">
+        <Pencil className="w-4 h-4" />
+      </div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">
+        Change Activity
+      </div>
+      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
+        {total}
+      </div>
+    </Card>
+  );
+}
+
+// ================== Main Component ==================
+
 const BackupReplication = () => {
-  // NOTE: The webhook returns an ARRAY of two objects: [main, meta].
-  // We intentionally handle that contract here (without modifying hooks/services).
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [raw, setRaw] = useState<unknown>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [selectedVmName, setSelectedVmName] = useState<string | null>(null);
+
+  // Drawer states
+  const [selectedVm, setSelectedVm] = useState<MatchedVm | null>(null);
+  const [vmDrawerOpen, setVmDrawerOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [jobDrawerOpen, setJobDrawerOpen] = useState(false);
+  const [changeDrawerOpen, setChangeDrawerOpen] = useState(false);
+
+  // Current view tab
+  const [activeView, setActiveView] = useState("protected");
 
   const loading = status === "loading";
 
-  const refresh = async () => {
-    setStatus("loading");
+  const refresh = async (isSilent = false) => {
+    // Only show loading on initial load (not during silent auto-refresh)
+    if (!isSilent) {
+      setStatus("loading");
+    }
     setError(null);
+
     try {
       const res = await fetch(ENDPOINT, {
         method: "GET",
@@ -135,24 +217,33 @@ const BackupReplication = () => {
       setRaw(json);
       setLastUpdatedAt(new Date());
       setStatus("success");
-    } catch (e: any) {
-      setError(e?.message || "Failed to load backup & replication data");
+    } catch (e: unknown) {
+      setError((e as Error)?.message || "Failed to load backup & replication data");
       setStatus("error");
     }
   };
 
+  // Initial load (shows loading spinner)
   useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void refresh(false); // false = show loading
   }, []);
 
-  const [query, setQuery] = useState("");
+  // Silent auto-refresh every 5 seconds (no loading, no UI change)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh(true); // true = silent (no loading overlay)
+    }, 5000); // 5 seconds – change to 10000 for 10s if preferred
 
+    return () => clearInterval(interval);
+  }, []);
+
+  // Search & filter state
+  const [query, setQuery] = useState("");
   const [protectedFilter, setProtectedFilter] = useState<"all" | "protected" | "unprotected">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "warning" | "stale">("all");
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 8;
+  const [powerStateFilter, setPowerStateFilter] = useState<"all" | "running" | "off">("all");
 
+  // Parse API response
   const { main, meta } = useMemo<{ main: MainObject; meta: MetaObject }>(() => {
     const arr = Array.isArray(raw) ? (raw as unknown[]) : null;
     const mainObj = (arr?.[0] ?? {}) as MainObject;
@@ -163,180 +254,244 @@ const BackupReplication = () => {
   const summary = main?.summary ?? null;
   const matched = (main?.matched ?? []) as MatchedVm[];
   const alerts = main?.alerts ?? null;
+  const vmsWithoutJobs = main?.vmsWithoutJobs ?? [];
+  const jobsWithoutVMs = main?.jobsWithoutVMs ?? [];
+  const multiVMJobs = main?.multiVMJobs ?? [];
+  const replicas = main?.replicas ?? [];
   const changes = meta?.changes ?? null;
+  const changeSummary = meta?.summary ?? null;
 
-  const selectedVm = useMemo(() => {
-    if (!selectedVmName) return null;
-    return matched.find((m) => (m?.vm?.name ?? "") === selectedVmName) ?? null;
-  }, [matched, selectedVmName]);
-
+  // Filter matched VMs
   const filteredMatched = useMemo<MatchedVm[]>(() => {
     const q = query.trim().toLowerCase();
-    const list = (matched ?? []).filter(Boolean);
+    let list = (matched ?? []).filter(Boolean);
 
-    const bySearch = !q
-      ? list
-      : list.filter((m) => safeLower(m.vm?.name).includes(q) || safeLower(m.vm?.guestOs).includes(q));
-
-    const byProtected =
-      protectedFilter === "all"
-        ? bySearch
-        : bySearch.filter((m) =>
-            protectedFilter === "protected" ? Boolean(m.vm?.isProtected) : !Boolean(m.vm?.isProtected)
-          );
-
-    const byStatus =
-      statusFilter === "all"
-        ? byProtected
-        : byProtected.filter((m) => {
-            const s = safeLower(m.protectionSummary?.overallStatus);
-            if (statusFilter === "success") return s.includes("success");
-            if (statusFilter === "warning") return s.includes("warn");
-            return s.includes("stale");
-          });
-
-    return byStatus;
-  }, [matched, query, protectedFilter, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredMatched.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pagedMatched = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredMatched.slice(start, start + PAGE_SIZE);
-  }, [filteredMatched, currentPage]);
-
-  useEffect(() => {
-    // Reset page when filters/search change.
-    setPage(1);
-  }, [query, protectedFilter, statusFilter]);
-
-  useEffect(() => {
-    // Keep selection valid.
-    if (selectedVmName && !matched.some((m) => (m?.vm?.name ?? "") === selectedVmName)) {
-      setSelectedVmName(null);
+    if (q) {
+      list = list.filter(
+        (m) => safeLower(m.vm?.name).includes(q) || safeLower(m.vm?.guestOs).includes(q)
+      );
     }
-  }, [matched, selectedVmName]);
 
-  const openJob = (job: Job) => {
+    if (protectedFilter !== "all") {
+      list = list.filter((m) =>
+        protectedFilter === "protected" ? m.vm?.isProtected : !m.vm?.isProtected
+      );
+    }
+
+    if (statusFilter !== "all") {
+      list = list.filter((m) => {
+        const s = safeLower(m.protectionSummary?.overallStatus);
+        if (statusFilter === "success") return s.includes("success");
+        if (statusFilter === "warning") return s.includes("warn");
+        return s.includes("stale");
+      });
+    }
+
+    if (powerStateFilter !== "all") {
+      list = list.filter((m) => {
+        const ps = safeLower(m.vm?.powerState);
+        if (powerStateFilter === "running") return ps.includes("run") || ps.includes("on");
+        return ps.includes("off") || ps.includes("stopped");
+      });
+    }
+
+    return list;
+  }, [matched, query, protectedFilter, statusFilter, powerStateFilter]);
+
+  // Pagination
+  const vmPagination = usePagination(filteredMatched, { defaultPageSize: 10 });
+
+  useEffect(() => {
+    vmPagination.setCurrentPage(1);
+  }, [query, protectedFilter, statusFilter, powerStateFilter]);
+
+  // Handle clicks
+  const handleVmClick = (vm: MatchedVm) => {
+    setSelectedVm(vm);
+    setVmDrawerOpen(true);
+  };
+
+  const handleJobClick = (job: Job) => {
     setSelectedJob(job);
     setJobDrawerOpen(true);
   };
 
-  return (
-    <UserLayout>
-      <div className="space-y-6 animate-fade-in">
-        {/* Header */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <HardDrive className="w-6 h-6 text-primary glow-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Backup &amp; Replication</h1>
-              <p className="text-muted-foreground">VM protection status and job health</p>
-            </div>
-          </div>
+  const handleOpenChangeDrawer = () => {
+    setChangeDrawerOpen(true);
+  };
 
-          <div className="flex items-center gap-3">
-            {lastUpdatedAt && (
-              <Badge variant="secondary" className="bg-surface/50 border border-border/50">
+  const handleChangedJobClick = (changedJob: ChangedJob) => {
+    const jobLike: Job = {
+      jobName: changedJob.jobName,
+      jobType: changedJob.jobType ?? "Unknown",
+      platform: changedJob.platform ?? "Unknown",
+      lastRun: changedJob.changedAt ?? "",
+      lastRunDurationSec: 0,
+      avgDurationSec: 0,
+      lastTransferredBytes: 0,
+      backupStatus: {
+        status: changedJob.status ?? "Unknown",
+        jobStatus: changedJob.status ?? "Unknown",
+        backupAgeHours: 0,
+        ranWithinLast24Hours: false,
+      },
+      parsedJob: {
+        schedule: "",
+        target: "",
+        targetPlatform: "",
+        client: "",
+        location: "",
+        source_host: "",
+      },
+    };
+    setSelectedJob(jobLike);
+    setJobDrawerOpen(true);
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header - Only Updated timestamp + green/red connection icon */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        {/* Left side: Timestamp + status icon */}
+        <div className="flex items-center gap-3">
+          {lastUpdatedAt && (
+            <div className="flex items-center gap-3">
+              <Badge 
+                variant="outline" 
+                className="text-muted-foreground border-none px-0" // no background, no border
+              >
                 Updated: {lastUpdatedAt.toLocaleTimeString()}
               </Badge>
-            )}
-            <Button onClick={() => void refresh()} variant="outline" className="hover-lift" disabled={loading}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
+
+              {/* Connection status icon: Green when success, Red when error */}
+              <div className="flex items-center gap-1">
+                {status === "success" ? (
+                  <Wifi className="w-4 h-4 text-success animate-pulse-slow" />
+                ) : status === "error" ? (
+                  <WifiOff className="w-4 h-4 text-destructive" />
+                ) : (
+                  <Wifi className="w-4 h-4 text-muted-foreground" />
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Summary (Primary Monitoring: raw[0]) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
-          <SummaryCard
-            title="Total VMs"
-            value={summary?.overview?.totalVMs ?? "—"}
-            tone="info"
-          />
-          <SummaryCard
-            title="Protected VMs"
-            value={summary?.protection?.protectedVMs ?? "—"}
-            tone="success"
-          />
-          <SummaryCard
-            title="Unprotected VMs"
-            value={summary?.protection?.unprotectedVMs ?? "—"}
-            tone="danger"
-          />
-          <SummaryCard
-            title="Total Jobs"
-            value={summary?.overview?.totalJobs ?? "—"}
-            tone="info"
-          />
-          <SummaryCard
-            title="Stale Backups"
-            value={summary?.backupHealth?.staleBackups ?? "—"}
-            tone="warning"
-          />
-          <SummaryCard
-            title="Active Alerts"
-            value={
-              formatCount((alerts?.warnings?.length ?? 0) + (alerts?.critical?.length ?? 0))
-            }
-            tone={(alerts?.critical?.length ?? 0) > 0 ? "danger" : "warning"}
-          />
-        </div>
+        {/* Right side: Empty (you can add anything here later if needed) */}
+        <div />
+      </div>
 
-        {/* Change Tracking (Meta: raw[1]) */}
-        <Card className="glass-card p-4 rounded-lg border border-border">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-base font-semibold">Change Activity</h2>
-              <p className="text-sm text-muted-foreground">
-                New/modified/enabled/disabled jobs from the change tracking payload
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="bg-surface/50 border border-border/50">
-                New: {formatCount(changes?.new?.length ?? meta?.summary?.newJobs ?? 0)}
-              </Badge>
-              <Badge variant="secondary" className="bg-surface/50 border border-border/50">
-                Modified: {formatCount(changes?.modified?.length ?? meta?.summary?.modifiedJobs ?? 0)}
-              </Badge>
-              <Badge variant="secondary" className="bg-surface/50 border border-border/50">
-                Enabled: {formatCount(changes?.enabled?.length ?? meta?.summary?.enabledJobs ?? 0)}
-              </Badge>
-              <Badge variant="secondary" className="bg-surface/50 border border-border/50">
-                Disabled: {formatCount(changes?.disabled?.length ?? meta?.summary?.disabledJobs ?? 0)}
-              </Badge>
-            </div>
-          </div>
-        </Card>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
+        <SummaryCard
+          title="Total VMs"
+          value={formatCount(summary?.overview?.totalVMs ?? matched.length)}
+          icon={Server}
+          variant="info"
+        />
+        <SummaryCard
+          title="Protected VMs"
+          value={formatCount(summary?.protection?.protectedVMs ?? matched.filter((m) => m.vm?.isProtected).length)}
+          icon={Shield}
+          variant="success"
+        />
+        <SummaryCard
+          title="Unprotected VMs"
+          value={formatCount(summary?.protection?.unprotectedVMs ?? vmsWithoutJobs.length)}
+          icon={ShieldOff}
+          variant="danger"
+        />
+        <SummaryCard
+          title="Total Jobs"
+          value={formatCount(summary?.overview?.totalJobs ?? matched.reduce((acc, m) => acc + (m.jobs?.length ?? 0), 0))}
+          icon={Briefcase}
+          variant="info"
+        />
+        <SummaryCard
+          title="Stale Backups"
+          value={formatCount(summary?.backupHealth?.staleBackups ?? 0)}
+          icon={Clock}
+          variant="warning"
+        />
+        <SummaryCard
+          title="Active Alerts"
+          value={formatCount((alerts?.warnings?.length ?? 0) + (alerts?.critical?.length ?? 0))}
+          icon={Bell}
+          variant={(alerts?.critical?.length ?? 0) > 0 ? "danger" : "warning"}
+        />
+        <ChangeSummaryCard
+          newJobs={changeSummary?.newJobs ?? changes?.new?.length ?? 0}
+          modifiedJobs={changeSummary?.modifiedJobs ?? changes?.modified?.length ?? 0}
+          enabledJobs={changeSummary?.enabledJobs ?? changes?.enabled?.length ?? 0}
+          disabledJobs={changeSummary?.disabledJobs ?? changes?.disabled?.length ?? 0}
+          onClick={handleOpenChangeDrawer}
+        />
+      </div>
 
-        {/* Primary monitoring area: VM table (scan-optimized) + Jobs panel (separate context) */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-          <Card className="glass-card p-6 rounded-lg border border-border xl:col-span-7">
+      {/* Tabs */}
+      <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
+        <TabsList className="w-full justify-start bg-muted/30 p-1 mb-4">
+          <TabsTrigger value="protected" className="gap-2">
+            <Shield className="h-4 w-4" />
+            Protected VMs ({matched.length})
+          </TabsTrigger>
+          <TabsTrigger value="unprotected" className="gap-2">
+            <ShieldOff className="h-4 w-4" />
+            Unprotected ({vmsWithoutJobs.length})
+          </TabsTrigger>
+          <TabsTrigger value="orphan" className="gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Orphan Jobs ({jobsWithoutVMs.length})
+          </TabsTrigger>
+          <TabsTrigger value="multivm" className="gap-2">
+            <Copy className="h-4 w-4" />
+            Multi-VM Jobs ({multiVMJobs.length})
+          </TabsTrigger>
+          <TabsTrigger value="replicas" className="gap-2">
+            <Database className="h-4 w-4" />
+            Replicas ({replicas.length})
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Alerts ({(alerts?.warnings?.length ?? 0) + (alerts?.critical?.length ?? 0)})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Protected VMs Tab */}
+        <TabsContent value="protected" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold">VM Protection View</h2>
+                <h2 className="text-lg font-semibold">VM Protection Table</h2>
                 <p className="text-sm text-muted-foreground">
-                  Select a VM to view its jobs in the right panel
+                  Click a VM row to view details and jobs
                 </p>
               </div>
 
-              <div className="w-full lg:w-[520px] flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap gap-2">
+                <div className="relative">
                   <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                   <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search VM name or OS…"
-                    className="pl-9 bg-surface/50 border-border/50 focus:border-primary transition-all"
-                    aria-label="Search VMs"
+                    className="pl-9 w-[200px] bg-muted/30"
                   />
                 </div>
 
-                <Select value={protectedFilter} onValueChange={(v: any) => setProtectedFilter(v)}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-surface/50 border-border/50">
+                <Select value={powerStateFilter} onValueChange={(v: "all" | "running" | "off") => setPowerStateFilter(v)}>
+                  <SelectTrigger className="w-[130px] bg-muted/30">
+                    <SelectValue placeholder="Power State" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All States</SelectItem>
+                    <SelectItem value="running">Running</SelectItem>
+                    <SelectItem value="off">Powered Off</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={protectedFilter} onValueChange={(v: "all" | "protected" | "unprotected") => setProtectedFilter(v)}>
+                  <SelectTrigger className="w-[140px] bg-muted/30">
                     <SelectValue placeholder="Protection" />
                   </SelectTrigger>
                   <SelectContent>
@@ -346,215 +501,559 @@ const BackupReplication = () => {
                   </SelectContent>
                 </Select>
 
-                <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-surface/50 border-border/50">
+                <Select value={statusFilter} onValueChange={(v: "all" | "success" | "warning" | "stale") => setStatusFilter(v)}>
+                  <SelectTrigger className="w-[130px] bg-muted/30">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="success">Success</SelectItem>
                     <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="stale">STALE</SelectItem>
+                    <SelectItem value="stale">Stale</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {error ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            {error && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 mb-4">
                 <div className="flex items-start gap-3">
                   <TriangleAlert className="w-5 h-5 text-destructive mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-medium">Failed to load Backup &amp; Replication data</div>
+                  <div>
+                    <div className="font-medium">Failed to load data</div>
                     <div className="text-sm text-muted-foreground">{error}</div>
                   </div>
                 </div>
               </div>
-            ) : loading ? (
-              <div className="text-sm text-muted-foreground py-10">Loading backup &amp; replication data…</div>
-            ) : (
-              <div className="rounded-lg border border-border overflow-hidden">
-                <Table>
-                  <TableHeader>
+            )}
+
+            {/* Only show loading on initial load */}
+            {loading && (
+              <div className="text-sm text-muted-foreground py-10 text-center">
+                Loading backup & replication data…
+              </div>
+            )}
+
+            {!error && !loading && (
+              <>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead>VM Name</TableHead>
+                        <TableHead>Power State</TableHead>
+                        <TableHead>OS</TableHead>
+                        <TableHead>Protected</TableHead>
+                        <TableHead>Overall Status</TableHead>
+                        <TableHead className="text-right">Jobs Count</TableHead>
+                        <TableHead>Backup Current</TableHead>
+                        <TableHead>Last Protected</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vmPagination.paginatedData.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                            No VMs found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        vmPagination.paginatedData.map((item) => {
+                          const vmName = item.vm?.name ?? "—";
+                          const backupCurrent = backupCurrentBadge(item.protectionSummary?.backupCurrent);
+
+                          return (
+                            <TableRow
+                              key={vmName}
+                              className="hover:bg-muted/30 cursor-pointer transition-colors"
+                              onClick={() => handleVmClick(item)}
+                            >
+                              <TableCell className="font-medium">{vmName}</TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    safeLower(item.vm?.powerState).includes("run")
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                >
+                                  {item.vm?.powerState ?? "—"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate" title={item.vm?.guestOs}>
+                                {item.vm?.guestOs ?? "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={item.vm?.isProtected ? "default" : "destructive"}>
+                                  {item.vm?.isProtected ? "Yes" : "No"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge status={item.protectionSummary?.overallStatus} size="sm" />
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {item.protectionSummary?.totalJobs ?? item.jobs?.length ?? 0}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={backupCurrent.variant}>{backupCurrent.label}</Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatDateTime(item.vm?.lastProtectedDate)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {filteredMatched.length > 0 && (
+                  <TablePagination
+                    currentPage={vmPagination.currentPage}
+                    totalPages={vmPagination.totalPages}
+                    totalItems={vmPagination.totalItems}
+                    startIndex={vmPagination.startIndex}
+                    endIndex={vmPagination.endIndex}
+                    pageSize={vmPagination.pageSize}
+                    onPageChange={vmPagination.setCurrentPage}
+                    onPageSizeChange={vmPagination.setPageSize}
+                    canGoNext={vmPagination.canGoNext}
+                    canGoPrevious={vmPagination.canGoPrevious}
+                    onFirstPage={vmPagination.goToFirstPage}
+                    onLastPage={vmPagination.goToLastPage}
+                    onNextPage={vmPagination.goToNextPage}
+                    onPreviousPage={vmPagination.goToPreviousPage}
+                  />
+                )}
+              </>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* Unprotected VMs */}
+        <TabsContent value="unprotected" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">Unprotected VMs</h2>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>VM Name</TableHead>
+                    <TableHead>Power State</TableHead>
+                    <TableHead>OS</TableHead>
+                    <TableHead>Last Seen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vmsWithoutJobs.length === 0 ? (
                     <TableRow>
-                      <TableHead>VM Name</TableHead>
-                      <TableHead>Power State</TableHead>
-                      <TableHead>OS</TableHead>
-                      <TableHead>Protected</TableHead>
-                      <TableHead>Overall Status</TableHead>
-                      <TableHead className="text-right">Jobs Count</TableHead>
-                      <TableHead>Backup Current</TableHead>
-                      <TableHead>Last Protected</TableHead>
+                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                        No unprotected VMs
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagedMatched.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                          No VMs found
+                  ) : (
+                    vmsWithoutJobs.map((vm) => (
+                      <TableRow key={vm.name} className="hover:bg-muted/30">
+                        <TableCell className="font-medium">{vm.name}</TableCell>
+                        <TableCell>{vm.powerState ?? "—"}</TableCell>
+                        <TableCell>{vm.guestOs ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDateTime(vm.lastSeen)}
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      pagedMatched.map((item) => {
-                        const vmName = item.vm?.name ?? "—";
-                        const isSelected = selectedVmName === vmName;
-                        const backupCurrent = backupCurrentBadge(item.protectionSummary?.backupCurrent);
-
-                        return (
-                          <TableRow
-                            key={vmName}
-                            className={
-                              isSelected
-                                ? "bg-primary/10 hover:bg-primary/10"
-                                : "hover:bg-muted/30"
-                            }
-                          >
-                            <TableCell className="font-medium">
-                              <button
-                                type="button"
-                                className="text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                                onClick={() => setSelectedVmName(vmName)}
-                                aria-pressed={isSelected}
-                              >
-                                {vmName}
-                              </button>
-                            </TableCell>
-                            <TableCell>{item.vm?.powerState ?? "—"}</TableCell>
-                            <TableCell className="max-w-[260px] truncate" title={item.vm?.guestOs}>
-                              {item.vm?.guestOs ?? "—"}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={item.vm?.isProtected ? "default" : "secondary"}>
-                                {item.vm?.isProtected ? "Yes" : "No"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={overallStatusBadgeVariant(item.protectionSummary?.overallStatus) as any}>
-                                {item.protectionSummary?.overallStatus ?? "—"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {item.protectionSummary?.totalJobs ?? 0}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={backupCurrent.variant}>{backupCurrent.label}</Badge>
-                            </TableCell>
-                            <TableCell>{item.vm?.lastProtectedDate ?? "—"}</TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* Pagination (max 8 rows/page) */}
-            {!error && !loading && filteredMatched.length > 0 && (
-              <div className="flex items-center justify-between gap-3 pt-4">
-                <div className="text-xs text-muted-foreground">
-                  Showing {(currentPage - 1) * PAGE_SIZE + 1}
-                  –{Math.min(currentPage * PAGE_SIZE, filteredMatched.length)} of {filteredMatched.length}
-                </div>
-
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setPage((p) => Math.max(1, p - 1));
-                        }}
-                      />
-                    </PaginationItem>
-
-                    {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
-                      // Windowed pages around current page
-                      const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
-                      const pageNum = start + idx;
-                      if (pageNum > totalPages) return null;
-                      return (
-                        <PaginationItem key={pageNum}>
-                          <PaginationLink
-                            href="#"
-                            isActive={pageNum === currentPage}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setPage(pageNum);
-                            }}
-                          >
-                            {pageNum}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
-                    })}
-
-                    <PaginationItem>
-                      <PaginationNext
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setPage((p) => Math.min(totalPages, p + 1));
-                        }}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </div>
-            )}
-          </Card>
-
-          {/* Jobs panel: separate VM vs Job context */}
-          <Card className="glass-card p-6 rounded-lg border border-border xl:col-span-5">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold">Jobs</h2>
-                <p className="text-sm text-muted-foreground">
-                  {selectedVm ? (
-                    <>
-                      VM: <span className="text-foreground font-medium">{selectedVm.vm?.name}</span>
-                      {" "}
-                      <span className="text-muted-foreground">
-                        ({selectedVm.jobs?.length ?? 0} jobs)
-                      </span>
-                    </>
-                  ) : (
-                    "Select a VM to inspect its jobs"
+                    ))
                   )}
-                </p>
-              </div>
-              {selectedVm && (
-                <Badge variant="secondary" className="bg-surface/50 border border-border/50">
-                  {selectedVm.vm?.isProtected ? "Protected" : "Unprotected"}
-                </Badge>
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Orphan Jobs */}
+        <TabsContent value="orphan" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">Orphan Jobs (Jobs Without VMs)</h2>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Job Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Schedule</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Run</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobsWithoutVMs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        No orphan jobs
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    jobsWithoutVMs.map((job) => (
+                      <TableRow key={job.jobName} className="hover:bg-muted/30">
+                        <TableCell className="font-medium">{job.jobName}</TableCell>
+                        <TableCell>{job.jobType ?? "—"}</TableCell>
+                        <TableCell>{job.platform ?? "—"}</TableCell>
+                        <TableCell>{job.schedule ?? "—"}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={job.status} size="sm" />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDateTime(job.lastRun)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Multi-VM Jobs */}
+        <TabsContent value="multivm" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">Multi-VM Jobs</h2>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Job Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Linked VMs</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Run</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {multiVMJobs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        No multi-VM jobs
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    multiVMJobs.map((job) => (
+                      <TableRow key={job.jobName} className="hover:bg-muted/30">
+                        <TableCell className="font-medium">{job.jobName}</TableCell>
+                        <TableCell>{job.jobType ?? "—"}</TableCell>
+                        <TableCell>{job.platform ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{job.linkedVMs?.length ?? 0} VMs</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={job.status} size="sm" />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDateTime(job.lastRun)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Replicas */}
+        <TabsContent value="replicas" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">Replicas</h2>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Replica Name</TableHead>
+                    <TableHead>Source VM</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Health</TableHead>
+                    <TableHead>Last Sync</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {replicas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        No replicas
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    replicas.map((replica) => (
+                      <TableRow key={replica.name} className="hover:bg-muted/30">
+                        <TableCell className="font-medium">{replica.name}</TableCell>
+                        <TableCell>{replica.sourceVm ?? "—"}</TableCell>
+                        <TableCell>{replica.target ?? "—"}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={replica.status} size="sm" />
+                        </TableCell>
+                        <TableCell>{replica.health ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDateTime(replica.lastSync)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Alerts */}
+        <TabsContent value="alerts" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">Alerts</h2>
+            <div className="space-y-4">
+              {(alerts?.critical?.length ?? 0) > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-destructive mb-2">Critical Alerts</h3>
+                  <div className="space-y-2">
+                    {alerts?.critical?.map((alert: any) => (
+                      <div
+                        key={alert.id}
+                        className="p-3 rounded-lg border border-destructive/30 bg-destructive/5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
+                          <div>
+                            <div className="font-medium text-sm">{alert.message}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatDateTime(alert.timestamp)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(alerts?.warnings?.length ?? 0) > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-500 mb-2">Warnings</h3>
+                  <div className="space-y-2">
+                    {alerts?.warnings?.map((alert: any) => (
+                      <div
+                        key={alert.id}
+                        className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <TriangleAlert className="w-4 h-4 text-amber-500 mt-0.5" />
+                          <div>
+                            <div className="font-medium text-sm">{alert.message}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatDateTime(alert.timestamp)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(alerts?.critical?.length ?? 0) === 0 && (alerts?.warnings?.length ?? 0) === 0 && (
+                <div className="text-center py-10 text-muted-foreground">No active alerts</div>
               )}
             </div>
-
-            {!selectedVm ? (
-              <div className="rounded-lg border border-border/60 bg-surface/30 p-6">
-                <div className="text-sm font-medium">No VM selected</div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  Pick a VM from the table to see job health, schedules, and details.
-                </div>
-              </div>
-            ) : (selectedVm.jobs?.length ?? 0) === 0 ? (
-              <div className="rounded-lg border border-warning/30 bg-warning/5 p-6">
-                <div className="text-sm font-medium">No jobs for this VM</div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  This VM appears in matched[] but has no jobs[] entries.
-                </div>
-              </div>
-            ) : (
-              <JobsTable jobs={selectedVm.jobs ?? []} onSelectJob={openJob} />
-            )}
           </Card>
-        </div>
+        </TabsContent>
 
-        <JobDetailDrawer open={jobDrawerOpen} onOpenChange={setJobDrawerOpen} job={selectedJob} />
-      </div>
-    </UserLayout>
+        {/* Changes */}
+        <TabsContent value="changes" className="mt-0">
+          <Card className="p-6 rounded-lg border border-border">
+            <ChangeActivityContent
+              changes={changes}
+              changeSummary={changeSummary}
+              loading={loading}
+              onSelectJob={handleChangedJobClick}
+            />
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Drawers */}
+      <VmDrawer
+        open={vmDrawerOpen}
+        onOpenChange={setVmDrawerOpen}
+        vm={selectedVm}
+        onSelectJob={handleJobClick}
+      />
+
+      <JobDetailDrawer
+        open={jobDrawerOpen}
+        onOpenChange={setJobDrawerOpen}
+        job={selectedJob}
+      />
+
+      <ChangeActivityDrawer
+        open={changeDrawerOpen}
+        onOpenChange={setChangeDrawerOpen}
+        changes={changes}
+        changeSummary={changeSummary}
+        onSelectJob={handleChangedJobClick}
+      />
+    </div>
   );
 };
+
+// ================== Change Activity Content ==================
+
+interface ChangeActivityContentProps {
+  changes: any;
+  changeSummary: any;
+  loading: boolean;
+  onSelectJob?: (job: ChangedJob) => void;
+}
+
+function ChangeActivityContent({ changes, changeSummary, loading, onSelectJob }: ChangeActivityContentProps) {
+  const [activeTab, setActiveTab] = useState("new");
+
+  if (loading) {
+    return <div className="text-center py-10 text-muted-foreground">Loading changes…</div>;
+  }
+
+  if (!changes) {
+    return <div className="text-center py-10 text-muted-foreground">No change data available</div>;
+  }
+
+  const tabData = {
+    new: changes.new ?? [],
+    modified: changes.modified ?? [],
+    enabled: changes.enabled ?? [],
+    disabled: changes.disabled ?? [],
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 border border-emerald-500/30 bg-emerald-500/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-muted-foreground">New Jobs</div>
+              <div className="text-2xl font-bold text-emerald-500">{changeSummary?.newJobs ?? tabData.new.length}</div>
+            </div>
+            <Plus className="w-5 h-5 text-emerald-500" />
+          </div>
+        </Card>
+        <Card className="p-4 border border-blue-500/30 bg-blue-500/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-muted-foreground">Modified Jobs</div>
+              <div className="text-2xl font-bold text-blue-500">{changeSummary?.modifiedJobs ?? tabData.modified.length}</div>
+            </div>
+            <Pencil className="w-5 h-5 text-blue-500" />
+          </div>
+        </Card>
+        <Card className="p-4 border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-muted-foreground">Enabled Jobs</div>
+              <div className="text-2xl font-bold text-amber-500">{changeSummary?.enabledJobs ?? tabData.enabled.length}</div>
+            </div>
+            <Power className="w-5 h-5 text-amber-500" />
+          </div>
+        </Card>
+        <Card className="p-4 border border-red-500/30 bg-red-500/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-muted-foreground">Disabled Jobs</div>
+              <div className="text-2xl font-bold text-red-500">{changeSummary?.disabledJobs ?? tabData.disabled.length}</div>
+            </div>
+            <PowerOff className="w-5 h-5 text-red-500" />
+          </div>
+        </Card>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full justify-start bg-muted/30 p-1">
+          <TabsTrigger value="new" className="gap-2">
+            <Plus className="h-4 w-4" />
+            New ({tabData.new.length})
+          </TabsTrigger>
+          <TabsTrigger value="modified" className="gap-2">
+            <Pencil className="h-4 w-4" />
+            Modified ({tabData.modified.length})
+          </TabsTrigger>
+          <TabsTrigger value="enabled" className="gap-2">
+            <Power className="h-4 w-4" />
+            Enabled ({tabData.enabled.length})
+          </TabsTrigger>
+          <TabsTrigger value="disabled" className="gap-2">
+            <PowerOff className="h-4 w-4" />
+            Disabled ({tabData.disabled.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {Object.entries(tabData).map(([key, jobs]) => (
+          <TabsContent key={key} value={key} className="mt-4">
+            <ChangedJobsTable jobs={jobs as ChangedJob[]} onSelectJob={onSelectJob} />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  );
+}
+
+// ================== Changed Jobs Table ==================
+
+function ChangedJobsTable({
+  jobs,
+  onSelectJob,
+}: {
+  jobs: ChangedJob[];
+  onSelectJob?: (job: ChangedJob) => void;
+}) {
+  if (jobs.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-lg">
+        No jobs in this category
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            <TableHead>Job Name</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Platform</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Changed At</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {jobs.map((job, idx) => (
+            <TableRow
+              key={`${job.jobName}-${idx}`}
+              className="hover:bg-muted/30 cursor-pointer transition-colors"
+              onClick={() => onSelectJob?.(job)}
+            >
+              <TableCell className="font-medium">{job.jobName}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{job.jobType ?? "—"}</Badge>
+              </TableCell>
+              <TableCell>{job.platform ?? "—"}</TableCell>
+              <TableCell>
+                <StatusBadge status={job.status} size="sm" />
+              </TableCell>
+              <TableCell className="text-muted-foreground">{formatDateTime(job.changedAt)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
 
 export default BackupReplication;

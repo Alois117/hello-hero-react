@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 
-// const WEBHOOK_URL = "http://10.100.12.54/webhook/ai/insights";
-const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
+const WEBHOOK_URL = "http://10.100.12.54:5678/webhook/ai/insights";
+// const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export interface WebhookAlert {

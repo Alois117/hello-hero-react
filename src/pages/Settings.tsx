@@ -82,11 +82,11 @@ const Settings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="john.doe@jarvis.com" className="glass-input" />
+                  <Input id="email" type="email" defaultValue="john.doe@avis.com" className="glass-input" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="company">Company</Label>
-                  <Input id="company" defaultValue="Jarvis Inc." className="glass-input" />
+                  <Input id="company" defaultValue="Avis Inc." className="glass-input" />
                 </div>
                 <Button onClick={handleSaveProfile} className="neon-button">
                   <Save className="w-4 h-4 mr-2" />

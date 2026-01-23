@@ -1,69 +1,75 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Server, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Server, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const data = [
-  { host: "api-gateway-01", alerts: 12 },
-  { host: "prod-web-01", alerts: 8 },
-  { host: "db-master-01", alerts: 6 },
-  { host: "cache-redis-03", alerts: 5 },
-  { host: "worker-queue-02", alerts: 3 },
+const mockHostData = [
+  { host: "prod-web-01", count: 47, severity: "high" },
+  { host: "db-master-02", count: 34, severity: "critical" },
+  { host: "cache-redis-03", count: 28, severity: "warning" },
+  { host: "api-gateway-01", count: 23, severity: "high" },
+  { host: "load-balancer-01", count: 19, severity: "average" },
 ];
 
-import { memo } from "react";
+const AlertsByHostWidget = () => {
+  const navigate = useNavigate();
 
-const AlertsByHostWidget = memo(() => {
+  const handleViewAlerts = (host: string) => {
+    navigate(`/dashboard/alerts?host=${host}`);
+  };
+
   return (
-    <div className="cyber-card">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-xl font-bold mb-1">Alerts by Host</h3>
-          <p className="text-sm text-muted-foreground">Top 5 noisy hosts</p>
-        </div>
-        <Server className="w-5 h-5 text-primary" />
+    <Card className="cyber-card p-6 bg-card/50 backdrop-blur border-border/50">
+      <div className="mb-6">
+        <h3 className="text-xl font-bold mb-1">Top Noisy Hosts</h3>
+        <p className="text-sm text-muted-foreground">Hosts with most alerts (Last 24h)</p>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis
-            dataKey="host"
-            angle={-45}
-            textAnchor="end"
-            height={100}
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fill: "hsl(var(--muted-foreground))" }}
-          />
-          <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--popover))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "0.5rem",
-            }}
-          />
-          <Bar dataKey="alerts" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-
-      <div className="mt-4 space-y-2">
-        {data.slice(0, 3).map((item) => (
+      <div className="space-y-3">
+        {mockHostData.map((item, i) => (
           <div
             key={item.host}
-            className="flex items-center justify-between p-2 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-colors"
+            className="flex items-center justify-between p-4 rounded-lg bg-surface/50 border border-border/50 hover:border-primary/50 transition-all cursor-pointer group"
+            onClick={() => handleViewAlerts(item.host)}
           >
-            <span className="text-sm font-medium">{item.host}</span>
-            <Button variant="ghost" size="sm" className="gap-1">
-              <span className="text-xs">{item.alerts} alerts</span>
-              <ExternalLink className="w-3 h-3" />
-            </Button>
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                <Server className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-sm">{item.host}</span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      item.severity === "critical"
+                        ? "bg-destructive/20 text-destructive"
+                        : item.severity === "high"
+                        ? "bg-accent/20 text-accent"
+                        : item.severity === "warning"
+                        ? "bg-warning/20 text-warning"
+                        : "bg-muted/20 text-muted-foreground"
+                    }`}
+                  >
+                    {item.severity}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {item.count} alerts
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           </div>
         ))}
       </div>
-    </div>
-  );
-});
 
-AlertsByHostWidget.displayName = "AlertsByHostWidget";
+      <button
+        onClick={() => navigate("/dashboard/alerts")}
+        className="w-full mt-4 py-2 px-4 rounded-lg bg-surface border border-border hover:border-primary text-sm font-medium transition-colors"
+      >
+        View All Hosts
+      </button>
+    </Card>
+  );
+};
 
 export default AlertsByHostWidget;

@@ -40,6 +40,18 @@ export const useHosts = () => {
 
   // Silent auto-refresh
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    if (hosts.length === 0) {
+      dispatch(fetchHosts()); // show loading only if no cache
+    } else {
+      dispatch(fetchHostsSilent()); // silent refresh if cache exists
+    }
+  }, [dispatch, hosts.length]);
+
+  // Silent auto-refresh
+  useEffect(() => {
     intervalRef.current = window.setInterval(() => {
       dispatch(fetchHostsSilent());
     }, REFRESH_INTERVAL);
