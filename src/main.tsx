@@ -26,7 +26,6 @@ createRoot(document.getElementById("root")!).render(
     initOptions={initOptions}
     onEvent={eventLogger}
     onTokens={tokenLogger}
-    LoadingComponent={<AuthLoadingScreen message="Connecting to identity provider..." />}
   >
     <App />
   </ReactKeycloakProvider>
