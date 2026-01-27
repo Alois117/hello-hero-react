@@ -1,33 +1,98 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Shield, Zap, Lock, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Shield, Zap, Lock, Loader2, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "@/keycloak";
+import { 
+  authenticateWithKeycloak, 
+  isValidEmail, 
+  isValidPassword 
+} from "@/keycloak/utils/directAuth";
+import keycloak from "@/keycloak/config/keycloak";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isInitialized, login, appRole } = useAuth();
+  const { isAuthenticated, isInitialized, appRole } = useAuth();
+
+  // Form state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Validation state
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  // Validation checks
+  const emailValid = isValidEmail(email);
+  const passwordValid = isValidPassword(password);
+  const formValid = email.trim() !== "" && emailValid && passwordValid;
+
+  // Validation error messages
+  const emailError = emailTouched && email.trim() !== "" && !emailValid 
+    ? "Please enter a valid email address" 
+    : null;
+  const passwordError = passwordTouched && password.length > 0 && !passwordValid 
+    ? "Password must be at least 6 characters" 
+    : null;
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isInitialized && isAuthenticated) {
-      // Navigate to role-specific dashboard
-      if (appRole === 'super_admin') {
-        navigate("/super-admin", { replace: true });
-      } else if (appRole === 'org_admin') {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
-      }
+      const roleRedirects: Record<string, string> = {
+        super_admin: "/super-admin",
+        org_admin: "/admin",
+        user: "/dashboard",
+      };
+      navigate(roleRedirects[appRole] || "/dashboard", { replace: true });
     }
   }, [isInitialized, isAuthenticated, appRole, navigate]);
 
-  const handleLogin = () => {
-    login();
-  };
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formValid || isSubmitting) return;
 
-  // Show loading while checking authentication status
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const result = await authenticateWithKeycloak({
+        username: email,
+        password: password,
+      });
+
+      if (result.success && result.access_token && result.refresh_token) {
+        // Initialize keycloak with the received tokens
+        // This sets the tokens in memory within the keycloak-js instance
+        await keycloak.init({
+          onLoad: 'check-sso',
+          token: result.access_token,
+          refreshToken: result.refresh_token,
+          idToken: result.id_token,
+          checkLoginIframe: false,
+        });
+
+        // Force a page reload to reinitialize the auth context with new tokens
+        // This ensures the ReactKeycloakProvider picks up the authenticated state
+        window.location.href = '/dashboard';
+      } else {
+        setError(result.error || "Invalid username or password");
+        setIsSubmitting(false);
+      }
+    } catch (err) {
+      console.error('[Login] Authentication error:', err);
+      setError("An unexpected error occurred. Please try again.");
+      setIsSubmitting(false);
+    }
+  }, [email, password, formValid, isSubmitting]);
+
+  // Show loading while checking existing authentication
   if (!isInitialized) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background">
@@ -71,30 +136,113 @@ const Login = () => {
 
         {/* Login Card */}
         <Card className="glass-card border-border/50 p-8">
-          <div className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="text-center space-y-2">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
                 <Lock className="w-8 h-8 text-primary" />
               </div>
               <h2 className="text-xl font-semibold">Secure Sign In</h2>
               <p className="text-sm text-muted-foreground">
-                Sign in with your enterprise credentials to access the monitoring dashboard.
+                Enter your credentials to access the monitoring dashboard.
               </p>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setEmailTouched(true)}
+                  disabled={isSubmitting}
+                  className={`pl-10 ${emailError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  autoComplete="email"
+                  autoFocus
+                />
+              </div>
+              {emailError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {emailError}
+                </p>
+              )}
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => setPasswordTouched(true)}
+                  disabled={isSubmitting}
+                  className={`pl-10 pr-10 ${passwordError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSubmitting}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {passwordError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {passwordError}
+                </p>
+              )}
+            </div>
+
+            {/* Submit Button */}
             <Button
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-background font-semibold py-6 rounded-xl glow-primary transition-all"
+              type="submit"
+              disabled={!formValid || isSubmitting}
+              className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-background font-semibold py-6 rounded-xl glow-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Lock className="w-4 h-4 mr-2" />
-              Login with Keycloak
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 mr-2" />
+                  Login
+                </>
+              )}
             </Button>
 
             <div className="text-center text-xs text-muted-foreground">
-              <p>Protected by enterprise-grade SSO</p>
-              <p>OAuth 2.0 + PKCE Authentication</p>
+              <p>Protected by enterprise-grade security</p>
+              <p>OAuth 2.0 Authentication</p>
             </div>
-          </div>
+          </form>
         </Card>
 
         {/* Footer */}
