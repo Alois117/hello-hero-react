@@ -8,8 +8,8 @@ import {
   Settings,
   Server as ServerIcon,
   Database,
-  Menu,      // ← hamburger icon
-  X,         // ← close icon
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,7 @@ const UserLayout = ({ children }: UserLayoutProps) => {
 
   return (
     <div className="min-h-screen w-full bg-background">
-      {/* Mobile Hamburger Button – visible only on small screens */}
+      {/* ========== MOBILE HEADER (visible only on small screens) ========== */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border h-16 flex items-center px-4 md:hidden">
         <Button variant="ghost" size="icon" onClick={toggleSidebar}>
           <Menu className="h-6 w-6" />
@@ -69,28 +69,36 @@ const UserLayout = ({ children }: UserLayoutProps) => {
         </div>
       </header>
 
-      {/* Sidebar – hidden on mobile by default, shown as overlay when open */}
+      {/* ========== SIDEBAR ========== */}
+      {/* 
+        Mobile: Hidden by default, slides in as overlay
+        Desktop: Fixed position, always visible, does NOT scroll with page
+      */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 w-64 bg-card/80 backdrop-blur-lg border-r border-border
           transform transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0 md:static md:inset-auto
+          md:translate-x-0
+          overflow-hidden
         `}
       >
-        <div className="p-6 h-full flex flex-col">
-          {/* Logo + Text – horizontal layout, same as original style but cleaner */}
-          <div className="flex items-center gap-3 mb-10">
-            <img
-              src="/favicon.png"
-              alt="Avis AI Monitoring Logo"
-              className="h-10 w-auto object-contain"
-            />
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
-                Avis
-              </h1>
-              <p className="text-xs text-muted-foreground">AI Monitoring</p>
+        {/* Sidebar inner container - flex column for proper structure */}
+        <div className="flex flex-col h-full">
+          {/* Logo Section (top) */}
+          <div className="p-6 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <img
+                src="/favicon.png"
+                alt="Avis AI Monitoring Logo"
+                className="h-10 w-auto object-contain"
+              />
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
+                  Avis
+                </h1>
+                <p className="text-xs text-muted-foreground">AI Monitoring</p>
+              </div>
             </div>
           </div>
 
@@ -104,12 +112,13 @@ const UserLayout = ({ children }: UserLayoutProps) => {
             <X className="h-6 w-6" />
           </Button>
 
-          <nav className="space-y-2 flex-1">
+          {/* Navigation - scrollable only if content overflows */}
+          <nav className="flex-1 overflow-y-auto px-4 space-y-2">
             {menuItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={() => setIsSidebarOpen(false)} // close on mobile after click
+                onClick={() => setIsSidebarOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface/50 transition-all"
                 activeClassName="bg-surface text-primary border-l-4 border-primary"
               >
@@ -119,7 +128,8 @@ const UserLayout = ({ children }: UserLayoutProps) => {
             ))}
           </nav>
 
-          <div className="border-t border-border pt-4 mt-auto">
+          {/* Footer/Status Section (bottom) - always fixed at bottom */}
+          <div className="flex-shrink-0 border-t border-border p-4 bg-card/50">
             <div className="flex items-center gap-2 text-sm justify-center">
               <div className="w-2 h-2 bg-success rounded-full animate-pulse-glow" />
               <span className="text-muted-foreground">System Online</span>
@@ -128,7 +138,7 @@ const UserLayout = ({ children }: UserLayoutProps) => {
         </div>
       </aside>
 
-      {/* Overlay backdrop on mobile when sidebar is open */}
+      {/* Mobile backdrop overlay */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -136,34 +146,41 @@ const UserLayout = ({ children }: UserLayoutProps) => {
         />
       )}
 
-      {/* Main Content – shift right only on md+ screens */}
-      <div className="md:ml-64 pt-16 md:pt-0">
-        {/* Desktop Header – hidden on mobile */}
-        <header className="hidden md:flex fixed top-0 right-0 left-64 h-18 bg-card/80 backdrop-blur-lg border-b border-border z-40 items-center px-6">
-          <div className="flex-1 max-w-2xl">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                placeholder="Search hosts, problems, insights..."
-                className="pl-10 bg-surface/50 border-border/50 focus:border-primary transition-all w-full"
-              />
-            </div>
+      {/* ========== DESKTOP HEADER (hidden on mobile) ========== */}
+      {/* 
+        Fixed positioning with left offset for sidebar
+        Does NOT overlap main content due to pt-[72px] on main
+      */}
+      <header className="hidden md:flex fixed top-0 right-0 left-64 h-[72px] bg-card/80 backdrop-blur-lg border-b border-border z-40 items-center px-6">
+        <div className="flex-1 max-w-2xl">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input
+              placeholder="Search hosts, problems, insights..."
+              className="pl-10 bg-surface/50 border-border/50 focus:border-primary transition-all w-full"
+            />
           </div>
+        </div>
 
-          <div className="flex items-center gap-4 ml-6">
-            <ThemeToggle />
-            <Button variant="ghost" size="icon" className="relative hover:bg-surface">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse-glow" />
-            </Button>
-            <UserInfoMenu />
-          </div>
-        </header>
+        <div className="flex items-center gap-4 ml-6">
+          <ThemeToggle />
+          <Button variant="ghost" size="icon" className="relative hover:bg-surface">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse-glow" />
+          </Button>
+          <UserInfoMenu />
+        </div>
+      </header>
 
-        <main className="p-6">
-          {children}
-        </main>
-      </div>
+      {/* ========== MAIN CONTENT ========== */}
+      {/* 
+        Mobile: pt-16 for mobile header, no left margin
+        Desktop: ml-64 for sidebar, pt-[72px] for header
+        Content starts below header and to the right of sidebar
+      */}
+      <main className="pt-16 md:pt-[72px] md:ml-64 p-6">
+        {children}
+      </main>
     </div>
   );
 };
