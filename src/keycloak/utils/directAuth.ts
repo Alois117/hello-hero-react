@@ -33,7 +33,8 @@ export interface DirectAuthCredentials {
 export async function authenticateWithKeycloak(
   credentials: DirectAuthCredentials
 ): Promise<DirectAuthResult> {
-  const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL || 'http://10.100.12.54:8080';
+  // const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL || 'http://10.100.12.141:8080';
+  const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080';
   const realm = import.meta.env.VITE_KEYCLOAK_REALM || 'Jarvis';
   const clientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend';
 
