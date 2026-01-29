@@ -38,7 +38,10 @@ const VeeamVMDetailDrawer = ({
 
   if (!vm) return null;
 
-  const rawJson = vm.raw_json;
+  // Access the nested json property from raw_json
+  const rawJson = vm.raw_json?.json;
+  if (!rawJson) return null;
+
   const isPoweredOn = rawJson.powerState === "PoweredOn";
   const isConnected = rawJson.connectionState === "Connected";
   const isProtected = rawJson.isProtected;
@@ -88,7 +91,7 @@ const VeeamVMDetailDrawer = ({
 
             <h2 className="text-xl font-bold flex items-center gap-2">
               <Monitor className="w-5 h-5 text-primary" />
-              {rawJson.name}
+              {rawJson.name ?? "Unknown VM"}
             </h2>
           </div>
 
