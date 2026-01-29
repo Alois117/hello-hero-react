@@ -10,10 +10,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '../context/AuthContext';
+import { useOrganization } from '../context/OrganizationContext';
 import LogoutConfirmDialog from './LogoutConfirmDialog';
 
 const UserInfoMenu: React.FC = () => {
-  const { username, email, roles, appRole, organizations, logout } = useAuth();
+  const { username, email, roles, appRole, logout } = useAuth();
+  const { organization, isSuperAdmin, organizationDisplayName } = useOrganization();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -88,31 +90,42 @@ const UserInfoMenu: React.FC = () => {
             </div>
           </div>
 
-          {/* Organizations Section */}
-          {organizations.length > 0 && (
+          {/* Organization Section - Show for non-super_admin with valid org */}
+          {!isSuperAdmin && organization && (
             <>
               <DropdownMenuSeparator />
               <div className="px-2 py-2">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                   <Building2 className="w-3 h-3" />
-                  <span>Organizations</span>
+                  <span>Organization</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {(organizations as string[]).slice(0, 3).map((org, index) => (
-                    <Badge 
-                      key={index} 
-                      variant="outline" 
-                      className="text-xs"
-                    >
-                      {typeof org === 'string' ? org : JSON.stringify(org)}
-                    </Badge>
-                  ))}
-                  {organizations.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{organizations.length - 3} more
-                    </Badge>
-                  )}
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs"
+                  >
+                    {organizationDisplayName || organization.orgKey}
+                  </Badge>
                 </div>
+              </div>
+            </>
+          )}
+
+          {/* Super Admin Indicator */}
+          {isSuperAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <Building2 className="w-3 h-3" />
+                  <span>Organization Access</span>
+                </div>
+                <Badge 
+                  variant="secondary" 
+                  className="text-xs bg-primary/20 text-primary"
+                >
+                  All Organizations
+                </Badge>
               </div>
             </>
           )}

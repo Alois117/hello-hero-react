@@ -24,7 +24,7 @@ interface AuthContextType {
   email: string;
   roles: string[];
   appRole: AppRole;
-  organizations: string[] | Record<string, unknown>[];
+  organizations: (string | Record<string, unknown>)[];
   decodedToken: DecodedToken | null;
   login: () => void;
   logout: () => void;

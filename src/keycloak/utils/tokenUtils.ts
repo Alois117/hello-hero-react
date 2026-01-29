@@ -1,4 +1,4 @@
-import jwtDecode, { type JwtPayload } from "jwt-decode";
+import { jwtDecode, type JwtPayload } from "jwt-decode";
 
 export interface DecodedToken extends JwtPayload {
   sub: string;
