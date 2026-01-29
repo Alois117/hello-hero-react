@@ -1,6 +1,6 @@
-import { jwtDecode } from 'jwt-decode';
+import jwtDecode, { type JwtPayload } from "jwt-decode";
 
-export interface DecodedToken {
+export interface DecodedToken extends JwtPayload {
   sub: string;
   email?: string;
   preferred_username?: string;
@@ -17,8 +17,6 @@ export interface DecodedToken {
   };
   orgs?: string[] | Record<string, unknown>[];
   organization?: string[] | Record<string, unknown>[];
-  exp: number;
-  iat: number;
 }
 
 export const decodeToken = (token: string): DecodedToken | null => {
@@ -32,26 +30,38 @@ export const decodeToken = (token: string): DecodedToken | null => {
 
 export const extractRoles = (decoded: DecodedToken | null, clientId: string): string[] => {
   if (!decoded) return [];
-  
+
   const realmRoles = decoded.realm_access?.roles || [];
   const clientRoles = decoded.resource_access?.[clientId]?.roles || [];
-  
+
   // Merge and deduplicate roles
   return [...new Set([...realmRoles, ...clientRoles])];
 };
 
-export const extractOrganizations = (decoded: DecodedToken | null): string[] | Record<string, unknown>[] => {
+export const extractOrganizations = (
+  decoded: DecodedToken | null
+): (string | Record<string, unknown>)[] => {
   if (!decoded) return [];
-  return decoded.orgs || decoded.organization || [];
+
+  // Return whichever field exists, or empty array
+  return (decoded.orgs || decoded.organization || []) as (string | Record<string, unknown>)[];
 };
 
 export const extractUsername = (decoded: DecodedToken | null): string => {
   if (!decoded) return 'Unknown User';
-  return decoded.preferred_username || decoded.email || decoded.sub || 'Unknown User';
+
+  return (
+    decoded.preferred_username ||
+    decoded.email ||
+    decoded.name ||
+    decoded.sub ||
+    'Unknown User'
+  );
 };
 
 export const isTokenExpired = (decoded: DecodedToken | null): boolean => {
-  if (!decoded) return true;
+  if (!decoded || !decoded.exp) return true;
+
   const currentTime = Math.floor(Date.now() / 1000);
   return decoded.exp < currentTime;
 };

@@ -1,59 +1,26 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Shield,
-  Zap,
-  Lock,
-  Loader2,
-  Mail,
-  Eye,
-  EyeOff,
-  AlertCircle,
-} from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 import { useAuth } from "@/keycloak";
-import keycloak from "@/keycloak/config/keycloak";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isInitialized, appRole } = useAuth();
+  const { isAuthenticated, isInitialized, login } = useAuth();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Redirect if already authenticated
+  // If already authenticated, hand off routing to AuthCallback
   useEffect(() => {
     if (isInitialized && isAuthenticated) {
-      const roleRedirects: Record<string, string> = {
-        super_admin: "/super-admin",
-        org_admin: "/admin",
-        user: "/dashboard",
-      };
-      navigate(roleRedirects[appRole] || "/dashboard", { replace: true });
+      navigate("/auth/callback", { replace: true });
     }
-  }, [isInitialized, isAuthenticated, appRole, navigate]);
+  }, [isInitialized, isAuthenticated, navigate]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (isSubmitting) return;
+  const handleLogin = () => {
+    login();
+  };
 
-      setIsSubmitting(true);
-
-      // 🔑 Correct Keycloak login (redirect-based)
-      keycloak.login({
-        redirectUri: `${window.location.origin}/dashboard`,
-        loginHint: email || undefined,
-      });
-    },
-    [email, isSubmitting]
-  );
-
+  // While Keycloak initializes
   if (!isInitialized) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background">
@@ -67,85 +34,93 @@ const Login = () => {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-background">
-      <div className="relative z-10 w-full max-w-md px-6">
+      {/* Animated Background */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute top-20 left-20 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-pulse-glow" />
+        <div
+          className="absolute bottom-20 right-20 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-pulse-glow"
+          style={{ animationDelay: "1s" }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse-glow"
+          style={{ animationDelay: "2s" }}
+        />
+      </div>
+
+      {/* Grid Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(hsl(var(--primary) / 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, hsl(var(--primary) / 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: "50px 50px",
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 w-full max-w-md px-6 animate-fade-in">
+        {/* Logo & Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <Shield className="w-12 h-12 text-primary" />
-            <Zap className="w-6 h-6 text-accent absolute" />
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <img
+              src="/favicon.png"
+              alt="Avis AI Monitoring Logo"
+              className="h-12 w-auto object-contain"
+            />
+            <div className="text-left">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
+                Avis
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                AI-Powered Monitoring
+              </p>
+            </div>
           </div>
-          <h1 className="text-4xl font-bold mb-2">Avis™</h1>
-          <p className="text-muted-foreground">
-            AI-Powered Monitoring Intelligence
-          </p>
         </div>
 
-        <Card className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label>Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  placeholder="you@example.com"
-                />
+        {/* Login Card */}
+        <Card className="glass-card border-border/50 p-8">
+          <div className="space-y-6">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+                <Lock className="w-8 h-8 text-primary" />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+              <h2 className="text-xl font-semibold">Secure Sign In</h2>
+              <p className="text-sm text-muted-foreground">
+                Sign in with your enterprise credentials to access the platform.
+              </p>
             </div>
 
             <Button
-              type="submit"
-              className="w-full"
-              disabled={isSubmitting}
+              onClick={handleLogin}
+              className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-background font-semibold py-6 rounded-xl glow-primary transition-all"
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Redirecting…
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4 mr-2" />
-                  Login
-                </>
-              )}
+              <Lock className="w-4 h-4 mr-2" />
+              Login with Keycloak
             </Button>
 
             <div className="text-center text-xs text-muted-foreground">
-              OAuth 2.0 • Keycloak Secure Login
+              <p>Protected by enterprise-grade SSO</p>
+              <p>OAuth 2.0 + PKCE Authentication</p>
             </div>
-          </form>
+          </div>
         </Card>
 
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Avis
+        {/* Footer */}
+        <div className="mt-8 text-center text-xs text-muted-foreground">
+          <p>Enterprise-Grade Monitoring • AI-Powered Insights</p>
+          <p>© {new Date().getFullYear()} Avis. All rights reserved.</p>
+          <div className="mt-2 flex items-center justify-center gap-4">
+            <Link to="/privacy-policy" className="hover:text-primary transition-colors">
+              Privacy Policy
+            </Link>
+            <Link to="/terms-of-use" className="hover:text-primary transition-colors">
+              Terms of Use
+            </Link>
+          </div>
         </div>
       </div>
     </div>

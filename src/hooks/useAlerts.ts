@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 
-const WEBHOOK_URL = "http://10.100.12.54:5678/webhook/ai/insights";
+const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/ai/insights";
 // const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
@@ -241,7 +241,7 @@ export const useAlerts = (): UseAlertsReturn => {
   // WebSocket simulation layer - ready for future upgrade
   useEffect(() => {
     // When endpoint supports WebSocket, implement here:
-    // const ws = new WebSocket('ws://10.100.12.54:5678/ws/alerts');
+    // const ws = new WebSocket('ws://10.100.12.141:5678/ws/alerts');
     // ws.onmessage = (event) => {
     //   const newAlert = JSON.parse(event.data);
     //   // Smart merge into alerts

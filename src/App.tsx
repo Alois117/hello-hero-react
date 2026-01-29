@@ -1,15 +1,14 @@
 import { Provider } from "react-redux";
 import { store } from "@/store";
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Keycloak Auth
 import { AuthProvider, ProtectedRoute } from "@/keycloak";
+import AuthCallback from "@/keycloak/pages/AuthCallback";
 
 // Public Pages
 import Login from "./pages/Login";
@@ -20,8 +19,8 @@ import ResetPassword from "./pages/ResetPassword";
 import TwoFASetup from "./pages/TwoFASetup";
 import TwoFAVerify from "./pages/TwoFAVerify";
 import NotFound from "./pages/NotFound";
-import PrivacyPolicy from './pages/legal/PrivacyPolicy'; 
-import TermsOfUse from './pages/legal/TermsOfUse';
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
+import TermsOfUse from "./pages/legal/TermsOfUse";
 
 // Shared Components
 import FloatingAIChatWrapper from "./components/ai/FloatingAIChatWrapper";
@@ -80,16 +79,17 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/2fa/setup" element={<TwoFASetup />} />
               <Route path="/2fa/verify" element={<TwoFAVerify />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
               {/* User Routes */}
-              <Route path="/dashboard" element={<ProtectedRoute requiredRole="user"><UserDashboard /></ProtectedRoute>} />
-              <Route path="/dashboard/zabbix" element={<ProtectedRoute requiredRole="user"><UserZabbix /></ProtectedRoute>} />
-              <Route path="/dashboard/hosts/:id" element={<ProtectedRoute requiredRole="user"><UserHostDetail /></ProtectedRoute>} />
-              <Route path="/dashboard/veeam" element={<ProtectedRoute requiredRole="user"><UserVeeam /></ProtectedRoute>} />
-              <Route path="/dashboard/traps" element={<ProtectedRoute requiredRole="user"><UserTraps /></ProtectedRoute>} />
-              <Route path="/dashboard/insights" element={<ProtectedRoute requiredRole="user"><UserInsights /></ProtectedRoute>} />
-              <Route path="/dashboard/reports" element={<ProtectedRoute requiredRole="user"><UserReports /></ProtectedRoute>} />
-              <Route path="/dashboard/settings" element={<ProtectedRoute requiredRole="user"><UserSettings /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserDashboard /></ProtectedRoute>} />
+              <Route path="/dashboard/zabbix" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserZabbix /></ProtectedRoute>} />
+              <Route path="/dashboard/hosts/:id" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserHostDetail /></ProtectedRoute>} />
+              <Route path="/dashboard/veeam" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserVeeam /></ProtectedRoute>} />
+              <Route path="/dashboard/traps" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserTraps /></ProtectedRoute>} />
+              <Route path="/dashboard/insights" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserInsights /></ProtectedRoute>} />
+              <Route path="/dashboard/reports" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserReports /></ProtectedRoute>} />
+              <Route path="/dashboard/settings" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserSettings /></ProtectedRoute>} />
 
               {/* Org Admin Routes */}
               <Route path="/admin" element={<ProtectedRoute requiredRole="org_admin"><OrgAdminDashboard /></ProtectedRoute>} />

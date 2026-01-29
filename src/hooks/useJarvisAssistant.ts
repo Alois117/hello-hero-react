@@ -11,7 +11,7 @@ interface UseJarvisAssistantReturn {
   error: string | null;
 }
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/Jarvis-AI-Assistant";
+const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/Jarvis-AI-Assistant";
 
 const useJarvisAssistant = (): UseJarvisAssistantReturn => {
   const [isLoading, setIsLoading] = useState(false);

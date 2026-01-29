@@ -15,26 +15,27 @@ const roleHierarchy: Record<AppRole, number> = {
   super_admin: 3,
 };
 
-const hasRequiredRole = (userRole: AppRole, requiredRole: AppRole): boolean => {
+const hasRequiredRole = (
+  userRole: AppRole,
+  requiredRole: AppRole
+): boolean => {
   return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
 };
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requiredRole = 'user',
-  redirectTo = '/login',
+  redirectTo = '/auth/callback',
 }) => {
   const { isAuthenticated, isInitialized, appRole } = useAuth();
   const location = useLocation();
 
-  // Show loading state while Keycloak initializes
+  // While Keycloak is initializing
   if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <div className="relative inline-flex">
-            <Shield className="w-12 h-12 text-primary animate-pulse" />
-          </div>
+          <Shield className="w-12 h-12 text-primary animate-pulse" />
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span>Initializing authentication...</span>
@@ -44,22 +45,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Redirect to login if not authenticated
+  // Not authenticated → go through auth flow
   if (!isAuthenticated) {
-    return <Navigate to={redirectTo} state={{ from: location }} replace />;
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location }}
+        replace
+      />
+    );
   }
 
-  // Check role-based access
+  // Authenticated but insufficient role → central router decides
   if (!hasRequiredRole(appRole, requiredRole)) {
-    // Redirect to appropriate dashboard based on user's actual role
-    const roleRedirects: Record<AppRole, string> = {
-      user: '/dashboard',
-      org_admin: '/admin',
-      super_admin: '/super-admin',
-    };
-    return <Navigate to={roleRedirects[appRole]} replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
+  // Authorized
   return <>{children}</>;
 };
 

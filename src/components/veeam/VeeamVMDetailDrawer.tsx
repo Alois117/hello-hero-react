@@ -38,9 +38,7 @@ const VeeamVMDetailDrawer = ({
 
   if (!vm) return null;
 
-  const rawJson = vm.raw_json?.json;
-  if (!rawJson) return null;
-  
+  const rawJson = vm.raw_json;
   const isPoweredOn = rawJson.powerState === "PoweredOn";
   const isConnected = rawJson.connectionState === "Connected";
   const isProtected = rawJson.isProtected;

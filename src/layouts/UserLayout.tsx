@@ -32,12 +32,11 @@ const menuItems = [
 
 const UserLayout = ({ children }: UserLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   return (
     <div className="min-h-screen w-full bg-background">
-      {/* ========== MOBILE HEADER (visible only on small screens) ========== */}
+      {/* MOBILE HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border h-16 flex items-center px-4 md:hidden">
         <Button variant="ghost" size="icon" onClick={toggleSidebar}>
           <Menu className="h-6 w-6" />
@@ -45,11 +44,7 @@ const UserLayout = ({ children }: UserLayoutProps) => {
 
         <div className="flex-1 flex justify-center">
           <div className="flex items-center gap-2">
-            <img
-              src="/favicon.png"
-              alt="Avis Logo"
-              className="h-8 w-auto object-contain"
-            />
+            <img src="/favicon.png" alt="Avis Logo" className="h-8 w-auto object-contain" />
             <div className="flex flex-col">
               <h1 className="text-lg font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
                 Avis
@@ -69,23 +64,15 @@ const UserLayout = ({ children }: UserLayoutProps) => {
         </div>
       </header>
 
-      {/* ========== SIDEBAR ========== */}
-      {/* 
-        Mobile: Hidden by default, slides in as overlay
-        Desktop: Fixed position, always visible, does NOT scroll with page
-      */}
+      {/* SIDEBAR */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 w-64 bg-card/80 backdrop-blur-lg border-r border-border
-          transform transition-transform duration-300 ease-in-out
-          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-          overflow-hidden
+          transform transition-transform duration-300 ease-in-out overflow-hidden
+          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `}
       >
-        {/* Sidebar inner container - flex column for proper structure */}
         <div className="flex flex-col h-full">
-          {/* Logo Section (top) */}
           <div className="p-6 flex-shrink-0">
             <div className="flex items-center gap-3">
               <img
@@ -102,7 +89,6 @@ const UserLayout = ({ children }: UserLayoutProps) => {
             </div>
           </div>
 
-          {/* Close button – only on mobile */}
           <Button
             variant="ghost"
             size="icon"
@@ -112,7 +98,6 @@ const UserLayout = ({ children }: UserLayoutProps) => {
             <X className="h-6 w-6" />
           </Button>
 
-          {/* Navigation - scrollable only if content overflows */}
           <nav className="flex-1 overflow-y-auto px-4 space-y-2">
             {menuItems.map((item) => (
               <NavLink
@@ -128,7 +113,6 @@ const UserLayout = ({ children }: UserLayoutProps) => {
             ))}
           </nav>
 
-          {/* Footer/Status Section (bottom) - always fixed at bottom */}
           <div className="flex-shrink-0 border-t border-border p-4 bg-card/50">
             <div className="flex items-center gap-2 text-sm justify-center">
               <div className="w-2 h-2 bg-success rounded-full animate-pulse-glow" />
@@ -140,17 +124,10 @@ const UserLayout = ({ children }: UserLayoutProps) => {
 
       {/* Mobile backdrop overlay */}
       {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={toggleSidebar}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={toggleSidebar} />
       )}
 
-      {/* ========== DESKTOP HEADER (hidden on mobile) ========== */}
-      {/* 
-        Fixed positioning with left offset for sidebar
-        Does NOT overlap main content due to pt-[72px] on main
-      */}
+      {/* DESKTOP HEADER */}
       <header className="hidden md:flex fixed top-0 right-0 left-64 h-[72px] bg-card/80 backdrop-blur-lg border-b border-border z-40 items-center px-6">
         <div className="flex-1 max-w-2xl">
           <div className="relative">
@@ -172,13 +149,8 @@ const UserLayout = ({ children }: UserLayoutProps) => {
         </div>
       </header>
 
-      {/* ========== MAIN CONTENT ========== */}
-      {/* 
-        Mobile: pt-16 for mobile header, no left margin
-        Desktop: ml-64 for sidebar, pt-[72px] for header
-        Content starts below header and to the right of sidebar
-      */}
-      <main className="pt-16 md:pt-[72px] md:ml-64 p-6">
+      {/* MAIN CONTENT */}
+      <main className="pt-16 md:pt-[100px] md:ml-64 p-6">
         {children}
       </main>
     </div>

@@ -102,7 +102,7 @@ interface UseVeeamInfrastructureReturn {
   };
 }
 
-const VEEAM_VMS_ENDPOINT = "http://10.100.12.54:5678/webhook/veeamone_vms";
+const VEEAM_VMS_ENDPOINT = "http://10.100.12.141:5678/webhook/veeamone_vms";
 const REFRESH_INTERVAL = 10000;
 
 export const useVeeamInfrastructure = (

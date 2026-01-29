@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Zap, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface AuthLoadingScreenProps {
   message?: string;
@@ -28,25 +28,35 @@ const AuthLoadingScreen: React.FC<AuthLoadingScreenProps> = ({
         />
       </div>
 
-      <div className="relative z-10 text-center space-y-6">
-        {/* Logo */}
-        <div className="inline-flex items-center gap-3">
-          <div className="relative">
-            <Shield className="w-16 h-16 text-primary" />
-            <Zap className="w-8 h-8 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+      <div className="relative z-10 text-center space-y-8">
+        {/* Logo & Brand */}
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-3">
+            <img
+              src="/favicon.png"
+              alt="Avis AI Monitoring Logo"
+              className="h-16 w-auto object-contain"
+            />
+            <div className="text-left">
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
+                Avis
+              </h1>
+              <p className="text-lg text-muted-foreground">
+                AI-Powered Monitoring
+              </p>
+            </div>
           </div>
-        </div>
 
-        <h1 className="text-4xl font-bold text-glow-primary">Avis™</h1>
-        
-        <div className="flex items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span>{message}</span>
-        </div>
+          {/* Loading Indicator */}
+          <div className="flex items-center justify-center gap-3 text-muted-foreground mt-6">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-xl">{message}</span>
+          </div>
 
-        <p className="text-sm text-muted-foreground">
-          Enterprise-Grade Security • Zero Trust Architecture
-        </p>
+          <p className="text-sm text-muted-foreground mt-4">
+            Enterprise-Grade Security • Zero Trust Architecture
+          </p>
+        </div>
       </div>
     </div>
   );

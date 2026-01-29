@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-const WEBHOOK_URL = "http://10.100.12.54:5678/webhook/backupandreplication";
+const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/backupandreplication";
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export interface VeeamJobMetrics {

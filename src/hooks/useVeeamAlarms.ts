@@ -70,7 +70,7 @@ interface UseVeeamAlarmsReturn {
   entityTypes: string[];
 }
 
-const VEEAM_ALARMS_ENDPOINT = "http://10.100.12.54:5678/webhook/veeamone_b&r_alarms";
+const VEEAM_ALARMS_ENDPOINT = "http://10.100.12.141:5678/webhook/veeamone_b&r_alarms";
 const REFRESH_INTERVAL = 5000;
 
 export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAlarmsReturn => {

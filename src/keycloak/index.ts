@@ -24,11 +24,3 @@ export {
   isTokenExpired,
   type DecodedToken,
 } from './utils/tokenUtils';
-
-export {
-  authenticateWithKeycloak,
-  isValidEmail,
-  isValidPassword,
-  type DirectAuthResult,
-  type DirectAuthCredentials,
-} from './utils/directAuth';

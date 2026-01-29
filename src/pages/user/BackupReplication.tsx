@@ -49,7 +49,7 @@ import VmDrawer from "@/pages/user/backup-replication/components/VmDrawer";
 import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetailDrawer";
 import ChangeActivityDrawer from "@/pages/user/backup-replication/components/ChangeActivityDrawer";
 
-const ENDPOINT = "http://10.100.12.54:5678/webhook/backupandreplication";
+const ENDPOINT = "http://10.100.12.141:5678/webhook/backupandreplication";
 
 type Status = "idle" | "loading" | "success" | "error";
 
