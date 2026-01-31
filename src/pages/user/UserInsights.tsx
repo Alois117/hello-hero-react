@@ -2,16 +2,14 @@ import UserLayout from "@/layouts/UserLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import TablePagination from "@/components/ui/table-pagination";
-import { 
-  Lightbulb, 
-  TrendingUp, 
-  AlertTriangle, 
-  Zap, 
+import {
+  Lightbulb,
+  TrendingUp,
+  AlertTriangle,
+  Zap,
   Info,
   ChevronDown,
   ChevronUp,
@@ -22,27 +20,20 @@ import {
   Clock,
   Server,
   Loader2,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
-import { useState } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { 
-  useAiInsights, 
-  type AiInsight, 
+import {
+  useAiInsights,
+  type AiInsight,
   type TimeFilter,
-  getRelativeTime 
+  getRelativeTime,
 } from "@/hooks/useAiInsights";
 
-// ============================================================================
-// AI INSIGHTS PAGE - User Dashboard
-// Features:
-// - Real-time data from webhook (5s silent refresh)
-// - Time-based filtering (Today, 24h, 7d, 30d, Custom)
-// - Client-side pagination
-// - Expandable insight cards
-// - Responsive design
-// ============================================================================
+import InsightCard from "@/components/AI-Insights/InsightCard";
+
+import React, { useState } from "react";
 
 const UserInsights = () => {
   const {
@@ -63,25 +54,21 @@ const UserInsights = () => {
     setCustomDateFrom,
     customDateTo,
     setCustomDateTo,
-    counts,
+    highPriorityCount,
+    last24hCount,
+    mostAffectedHost,
     refresh,
   } = useAiInsights({ pageSize: 8 });
 
-  const [expandedInsights, setExpandedInsights] = useState<Set<string>>(new Set());
+  const [expandedInsights, setExpandedInsights] = useState<Record<string, boolean>>({});
 
-  const toggleExpanded = (id: string) => {
-    setExpandedInsights((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const setExpanded = (id: string, open: boolean) => {
+    setExpandedInsights((prev) => ({
+      ...prev,
+      [id]: open,
+    }));
   };
 
-  // Get impact color based on severity/impact level
   const getImpactColor = (impact: string) => {
     switch (impact) {
       case "critical":
@@ -95,7 +82,6 @@ const UserInsights = () => {
     }
   };
 
-  // Get severity badge variant
   const getSeverityBadge = (severity: AiInsight["severity"]) => {
     const styles: Record<string, string> = {
       critical: "bg-error/20 text-error border-error/30",
@@ -107,7 +93,6 @@ const UserInsights = () => {
     return styles[severity] || styles.info;
   };
 
-  // Get type icon
   const getTypeIcon = (type: AiInsight["type"]) => {
     switch (type) {
       case "prediction":
@@ -123,7 +108,6 @@ const UserInsights = () => {
     }
   };
 
-  // Get type color
   const getTypeColor = (type: AiInsight["type"]) => {
     switch (type) {
       case "prediction":
@@ -139,7 +123,6 @@ const UserInsights = () => {
     }
   };
 
-  // Time filter options
   const timeFilterOptions: { value: TimeFilter; label: string }[] = [
     { value: "today", label: "Today" },
     { value: "24h", label: "Last 24 Hours" },
@@ -150,7 +133,7 @@ const UserInsights = () => {
 
   return (
     <UserLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -165,76 +148,76 @@ const UserInsights = () => {
             </div>
           </div>
 
-          {/* Connection Status & Refresh */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {isConnected ? (
-                <Wifi className="w-4 h-4 text-success" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-error" />
-              )}
-              {lastUpdated && (
-                <span className="hidden sm:inline">
-                  Updated {getRelativeTime(lastUpdated)}
+          {/* Status indicator + timestamp - no refresh button */}
+          <div className="flex items-center gap-3 text-sm">
+            {isConnected ? (
+              <Wifi className="w-4 h-4 text-success" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-error" />
+            )}
+            
+            {lastUpdated && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>Updated:</span>
+                <span className="font-medium">
+                  {lastUpdated.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: true,
+                  })}
                 </span>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refresh}
-              disabled={loading}
-              className="gap-2"
-            >
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-              <span className="hidden sm:inline">Refresh</span>
-            </Button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
-          <Card className="p-4 border-primary/20 bg-primary/5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/20">
-                <Lightbulb className="w-5 h-5 text-primary" />
+        {/* Only the new summary cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6">
+          <Card className="p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/15 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/20">
+                <Lightbulb className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{counts.total}</p>
-                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="text-3xl font-bold">{totalCount}</p>
+                <p className="text-sm text-muted-foreground mt-1">Total Insights</p>
               </div>
             </div>
           </Card>
-          <Card className="p-4 border-warning/20 bg-warning/5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-warning/20">
-                <Zap className="w-5 h-5 text-warning" />
+
+          <Card className="p-5 border-error/30 bg-gradient-to-br from-error/5 to-error/15 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-error/20">
+                <AlertTriangle className="w-6 h-6 text-error" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{counts.anomalies}</p>
-                <p className="text-sm text-muted-foreground">Anomalies</p>
+                <p className="text-3xl font-bold">{highPriorityCount}</p>
+                <p className="text-sm text-muted-foreground mt-1">High Priority</p>
               </div>
             </div>
           </Card>
-          <Card className="p-4 border-success/20 bg-success/5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-success/20">
-                <TrendingUp className="w-5 h-5 text-success" />
+
+          <Card className="p-5 border-accent/30 bg-gradient-to-br from-accent/5 to-accent/15 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-accent/20">
+                <Clock className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{counts.predictions}</p>
-                <p className="text-sm text-muted-foreground">Predictions</p>
+                <p className="text-3xl font-bold">{last24hCount}</p>
+                <p className="text-sm text-muted-foreground mt-1">Last 24h</p>
               </div>
             </div>
           </Card>
-          <Card className="p-4 border-accent/20 bg-accent/5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-accent/20">
-                <AlertTriangle className="w-5 h-5 text-accent" />
+
+          <Card className="p-5 border-warning/30 bg-gradient-to-br from-warning/5 to-warning/15 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-warning/20">
+                <Server className="w-6 h-6 text-warning" />
               </div>
-              <div>
-                <p className="text-2xl font-bold">{counts.alerts}</p>
-                <p className="text-sm text-muted-foreground">Alerts</p>
+              <div className="min-w-0">
+                <p className="text-3xl font-bold truncate">{mostAffectedHost}</p>
+                <p className="text-sm text-muted-foreground mt-1">Most Affected Host</p>
               </div>
             </div>
           </Card>
@@ -263,8 +246,6 @@ const UserInsights = () => {
                 </Button>
               ))}
             </div>
-
-            {/* Custom Date Range */}
             {timeFilter === "custom" && (
               <div className="flex flex-wrap gap-2 sm:ml-auto">
                 <Popover>
@@ -304,7 +285,7 @@ const UserInsights = () => {
           </div>
         </Card>
 
-        {/* Loading State */}
+        {/* Loading */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -312,7 +293,7 @@ const UserInsights = () => {
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error */}
         {error && !loading && (
           <Card className="p-8 border-error/30 bg-error/5">
             <div className="flex flex-col items-center justify-center gap-4 text-center">
@@ -329,7 +310,7 @@ const UserInsights = () => {
           </Card>
         )}
 
-        {/* Empty State */}
+        {/* No Insights */}
         {!loading && !error && paginatedInsights.length === 0 && (
           <Card className="p-12">
             <div className="flex flex-col items-center justify-center gap-4 text-center">
@@ -351,170 +332,17 @@ const UserInsights = () => {
         {/* Insights List */}
         {!loading && !error && paginatedInsights.length > 0 && (
           <div className="grid gap-4">
-            {paginatedInsights.map((insight, index) => (
-              <Card
+            {paginatedInsights.map((insight) => (
+              <InsightCard
                 key={insight.id}
-                className={cn(
-                  "overflow-hidden transition-all duration-300 hover:border-primary/30",
-                  "animate-fade-in"
-                )}
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <Collapsible
-                  open={expandedInsights.has(insight.id)}
-                  onOpenChange={() => toggleExpanded(insight.id)}
-                >
-                  {/* Card Header */}
-                  <div className="p-4 md:p-6">
-                    <div className="flex flex-col md:flex-row md:items-start gap-4">
-                      {/* Icon & Type */}
-                      <div
-                        className={cn(
-                          "p-3 rounded-lg shrink-0",
-                          "bg-muted/50 border border-border",
-                          getTypeColor(insight.type)
-                        )}
-                      >
-                        {getTypeIcon(insight.type)}
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 space-y-3">
-                        <div className="flex flex-wrap items-start gap-2">
-                          <Badge
-                            variant="outline"
-                            className={cn("capitalize", getSeverityBadge(insight.severity))}
-                          >
-                            {insight.severity}
-                          </Badge>
-                          <Badge variant="outline" className="capitalize">
-                            {insight.type}
-                          </Badge>
-                          {insight.host && (
-                            <Badge variant="secondary" className="gap-1">
-                              <Server className="w-3 h-3" />
-                              {insight.host}
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div>
-                          <h3 className="font-semibold text-lg leading-tight">
-                            {insight.title}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {insight.summary}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">Impact:</span>
-                            <Badge
-                              variant="outline"
-                              className={cn("capitalize", getImpactColor(insight.impact))}
-                            >
-                              {insight.impact}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">Confidence:</span>
-                            <span className="font-medium text-primary">
-                              {insight.confidence}%
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Clock className="w-4 h-4" />
-                            <span>{getRelativeTime(insight.createdAt)}</span>
-                          </div>
-                        </div>
-
-                        {/* Recommendation Preview */}
-                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-                          <p className="text-sm">
-                            <span className="font-medium">Recommendation: </span>
-                            <span className="text-muted-foreground">
-                              {insight.recommendation}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex md:flex-col gap-2 shrink-0">
-                        <CollapsibleTrigger asChild>
-                          <Button variant="outline" size="sm" className="gap-2">
-                            {expandedInsights.has(insight.id) ? (
-                              <>
-                                <ChevronUp className="w-4 h-4" />
-                                <span className="hidden sm:inline">Less</span>
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="w-4 h-4" />
-                                <span className="hidden sm:inline">Details</span>
-                              </>
-                            )}
-                          </Button>
-                        </CollapsibleTrigger>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded Content */}
-                  <CollapsibleContent>
-                    <div className="px-4 pb-4 md:px-6 md:pb-6 pt-0">
-                      <div className="border-t border-border pt-4 space-y-4">
-                        {/* Entity Details */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              Entity Type
-                            </p>
-                            <p className="font-medium">{insight.entityType}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              Host
-                            </p>
-                            <p className="font-medium">{insight.host || "N/A"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              Created
-                            </p>
-                            <p className="font-medium">
-                              {insight.createdAt.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              Status
-                            </p>
-                            <Badge variant="outline" className="capitalize">
-                              {insight.status}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Full Response Content */}
-                        {insight.responseContent && (
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                              Full Analysis
-                            </p>
-                            <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                              <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                                {insight.responseContent}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
+                insight={insight}
+                expanded={!!expandedInsights[insight.id]}
+                onExpandedChange={(open) => setExpanded(insight.id, open)}
+                getImpactColor={getImpactColor}
+                getSeverityBadge={getSeverityBadge}
+                getTypeIcon={getTypeIcon}
+                getTypeColor={getTypeColor}
+              />
             ))}
           </div>
         )}

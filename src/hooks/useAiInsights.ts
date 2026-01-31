@@ -1,22 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
-// ============================================================================
-// AI INSIGHTS HOOK
-// Fetches AI-generated insights from backend webhook with:
-// - Silent 5-second refresh (no UI flicker)
-// - Client-side pagination
-// - Time-based filtering
-// - Sorted by created_at descending (newest first)
-// ============================================================================
-
-const AI_INSIGHTS_ENDPOINT = "https://10.100.12.141:5678/webhook/agent-insights";
+const AI_INSIGHTS_ENDPOINT = "http://localhost:5678/webhook/agent-insights"; // using Vite proxy
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
-// Response structure from the webhook
 export interface AiInsightRaw {
   id?: string | number;
+  ai_response_id?: string;
   entity_type?: string;
+  entity_uid?: string; 
   entity_id?: string;
   host?: string;
   event_reference?: string;
@@ -31,10 +23,9 @@ export interface AiInsightRaw {
   impact?: string;
   confidence?: number;
   recommendation?: string;
-  [key: string]: unknown; // Allow additional fields
+  [key: string]: unknown;
 }
 
-// Normalized insight for UI consumption
 export interface AiInsight {
   id: string;
   entityType: string;
@@ -68,7 +59,6 @@ interface UseAiInsightsReturn {
   error: string | null;
   isConnected: boolean;
   lastUpdated: Date | null;
-  // Pagination
   currentPage: number;
   totalPages: number;
   totalCount: number;
@@ -76,14 +66,12 @@ interface UseAiInsightsReturn {
   pageSize: number;
   startIndex: number;
   endIndex: number;
-  // Time Filters
   timeFilter: TimeFilter;
   setTimeFilter: (filter: TimeFilter) => void;
   customDateFrom: Date | undefined;
   setCustomDateFrom: (date: Date | undefined) => void;
   customDateTo: Date | undefined;
   setCustomDateTo: (date: Date | undefined) => void;
-  // Counts by type
   counts: {
     total: number;
     predictions: number;
@@ -91,11 +79,14 @@ interface UseAiInsightsReturn {
     optimizations: number;
     alerts: number;
   };
-  // Manual refresh
+  // ── New fields for summary cards ───────────────
+  highPriorityCount: number;
+  last24hCount: number;
+  mostAffectedHost: string;
+  // ────────────────────────────────────────────────
   refresh: () => Promise<void>;
 }
 
-// Normalize severity values
 const normalizeSeverity = (severity?: string): AiInsight["severity"] => {
   if (!severity) return "info";
   const lower = severity.toLowerCase();
@@ -106,7 +97,6 @@ const normalizeSeverity = (severity?: string): AiInsight["severity"] => {
   return "info";
 };
 
-// Normalize impact values
 const normalizeImpact = (impact?: string): AiInsight["impact"] => {
   if (!impact) return "medium";
   const lower = impact.toLowerCase();
@@ -116,20 +106,34 @@ const normalizeImpact = (impact?: string): AiInsight["impact"] => {
   return "medium";
 };
 
-// Normalize type values
-const normalizeType = (type?: string): AiInsight["type"] => {
-  if (!type) return "info";
-  const lower = type.toLowerCase();
-  if (lower.includes("predict")) return "prediction";
-  if (lower.includes("anomal")) return "anomaly";
-  if (lower.includes("optim")) return "optimization";
-  if (lower.includes("alert")) return "alert";
+const normalizeType = (
+  type?: string,
+  severity?: string,
+  content?: string
+): AiInsight["type"] => {
+  const combined = `${type ?? ""} ${severity ?? ""} ${content ?? ""}`.toLowerCase();
+
+  if (combined.includes("predict") || combined.includes("forecast"))
+    return "prediction";
+
+  if (combined.includes("anomal") || combined.includes("outlier"))
+    return "anomaly";
+
+  if (combined.includes("optimi") || combined.includes("improve"))
+    return "optimization";
+
+  if (combined.includes("alert") || combined.includes("critical") || combined.includes("warning"))
+    return "alert";
+
   return "info";
 };
 
-// Transform raw API response to normalized insight
 const transformInsight = (raw: AiInsightRaw, index: number): AiInsight => {
-  const id = raw.id?.toString() || `insight-${Date.now()}-${index}`;
+  const id =
+    raw.ai_response_id ??
+    raw.event_reference ??
+    `${raw.entity_type}-${raw.entity_uid}-${raw.created_at}`;
+
   const createdAt = raw.created_at ? new Date(raw.created_at) : new Date();
   const updatedAt = raw.updated_at ? new Date(raw.updated_at) : null;
 
@@ -146,23 +150,20 @@ const transformInsight = (raw: AiInsightRaw, index: number): AiInsight => {
     responseContent: raw.response_content || "",
     summary: raw.summary || raw.title || extractSummary(raw.response_content),
     title: raw.title || generateTitle(raw),
-    type: normalizeType(raw.type),
+    type: normalizeType(raw.type, raw.severity, raw.response_content), 
     impact: normalizeImpact(raw.impact),
     confidence: typeof raw.confidence === "number" ? raw.confidence : 85,
     recommendation: raw.recommendation || extractRecommendation(raw.response_content),
   };
 };
 
-// Extract summary from response content
 const extractSummary = (content?: string): string => {
   if (!content) return "No summary available";
-  // Take first sentence or first 150 chars
   const firstSentence = content.split(/[.!?]/)[0];
   if (firstSentence.length <= 150) return firstSentence.trim();
   return content.substring(0, 147).trim() + "...";
 };
 
-// Generate title from raw data
 const generateTitle = (raw: AiInsightRaw): string => {
   if (raw.title) return raw.title;
   if (raw.entity_type && raw.host) return `${raw.entity_type} - ${raw.host}`;
@@ -170,10 +171,8 @@ const generateTitle = (raw: AiInsightRaw): string => {
   return "AI Insight";
 };
 
-// Extract recommendation from response content
 const extractRecommendation = (content?: string): string => {
   if (!content) return "Review the insight details for recommendations";
-  // Try to find recommendation patterns
   const patterns = [
     /recommend[ation]*[s]?:?\s*(.+?)(?:\.|$)/i,
     /suggest[ion]*[s]?:?\s*(.+?)(?:\.|$)/i,
@@ -186,7 +185,6 @@ const extractRecommendation = (content?: string): string => {
   return "Review the insight details for recommendations";
 };
 
-// Sort insights by created_at descending (newest first)
 const sortInsights = (insights: AiInsight[]): AiInsight[] => {
   return [...insights].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 };
@@ -200,21 +198,16 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Time filter state
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("7d");
   const [customDateFrom, setCustomDateFrom] = useState<Date | undefined>(undefined);
   const [customDateTo, setCustomDateTo] = useState<Date | undefined>(undefined);
 
-  // Refs for smart merge and cleanup
   const insightsMapRef = useRef<Map<string, AiInsight>>(new Map());
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { authenticatedFetch } = useAuthenticatedFetch();
 
-  // Fetch insights from webhook
   const fetchInsights = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -224,7 +217,7 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({}), // Empty body for POST request
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
@@ -232,14 +225,10 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
       }
 
       const data = await response.json();
-      
-      // Handle both array and single object responses
       const rawInsights: AiInsightRaw[] = Array.isArray(data) ? data : [data];
-      
-      // Transform to normalized format
+
       const transformedInsights = rawInsights.map((raw, idx) => transformInsight(raw, idx));
 
-      // Smart merge: only update changed insights to avoid UI flicker
       const newInsightsMap = new Map<string, AiInsight>();
       transformedInsights.forEach((insight) => {
         const existing = insightsMapRef.current.get(insight.id);
@@ -251,13 +240,20 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
       });
 
       insightsMapRef.current = newInsightsMap;
-      const sortedInsights = sortInsights(Array.from(newInsightsMap.values()));
-      setInsights(sortedInsights);
+
+      const newSorted = sortInsights(Array.from(newInsightsMap.values()));
+
+      setInsights((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(newSorted)) {
+          return prev;
+        }
+        return newSorted;
+      });
+
       setIsConnected(true);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      // Only set error on initial load, not on silent refresh failures
       if (!silent) {
         console.error("Failed to fetch AI insights:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch insights");
@@ -268,30 +264,24 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
     }
   }, [authenticatedFetch]);
 
-  // Initial fetch
   useEffect(() => {
     fetchInsights(false);
   }, [fetchInsights]);
 
-  // Silent refresh every 5 seconds
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       fetchInsights(true);
     }, REFRESH_INTERVAL);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [fetchInsights]);
 
-  // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [timeFilter, customDateFrom, customDateTo]);
 
-  // Apply time filters
   const filteredInsights = useMemo(() => {
     return insights.filter((insight) => {
       const insightTime = insight.createdAt.getTime();
@@ -330,18 +320,15 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
     });
   }, [insights, timeFilter, customDateFrom, customDateTo]);
 
-  // Calculate pagination
   const totalCount = filteredInsights.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalCount);
 
-  // Paginated insights
   const paginatedInsights = useMemo(() => {
     return filteredInsights.slice(startIndex, endIndex);
   }, [filteredInsights, startIndex, endIndex]);
 
-  // Counts by type
   const counts = useMemo(() => ({
     total: insights.length,
     predictions: insights.filter((i) => i.type === "prediction").length,
@@ -350,15 +337,60 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
     alerts: insights.filter((i) => i.type === "alert").length,
   }), [insights]);
 
-  // Manual refresh function
+  // ── New summary metrics ───────────────────────────────────────────────────
+  const highPriorityCount = useMemo(() => {
+    return insights.filter(i => 
+      i.severity === "critical" || 
+      i.severity === "high" || 
+      i.impact === "critical" || 
+      i.impact === "high"
+    ).length;
+  }, [insights]);
+
+  const last24hCount = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    return insights.filter(i => i.createdAt.getTime() >= cutoff).length;
+  }, [insights]);
+
+  const mostAffectedHost = useMemo(() => {
+    if (insights.length === 0) return "—";
+
+    const hostCounts = new Map<string, number>();
+
+    insights.forEach(i => {
+      let host = (i.host || "unknown").trim().toLowerCase();
+      if (host && host !== "unknown" && host !== "") {
+        hostCounts.set(host, (hostCounts.get(host) || 0) + 1);
+      }
+    });
+
+    if (hostCounts.size === 0) return "—";
+
+    let maxCount = 0;
+    let topHost = "";
+
+    hostCounts.forEach((count, host) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topHost = host;
+      }
+    });
+
+    // Nice capitalization
+    return topHost
+      .split(/[-_.]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("-");
+  }, [insights]);
+  // ───────────────────────────────────────────────────────────────────────────
+
   const refresh = useCallback(async () => {
     await fetchInsights(false);
   }, [fetchInsights]);
 
-  // Ensure current page is valid when total pages changes
   useEffect(() => {
     if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+      setCurrentPage(totalPages || 1);
     }
   }, [currentPage, totalPages]);
 
@@ -384,11 +416,13 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
     customDateTo,
     setCustomDateTo,
     counts,
+    highPriorityCount,
+    last24hCount,
+    mostAffectedHost,
     refresh,
   };
 };
 
-// Utility: Format date for display
 export const formatInsightDate = (date: Date): string => {
   return date.toLocaleString(undefined, {
     month: "short",
@@ -398,7 +432,6 @@ export const formatInsightDate = (date: Date): string => {
   });
 };
 
-// Utility: Get relative time string
 export const getRelativeTime = (date: Date): string => {
   const now = Date.now();
   const diffMs = now - date.getTime();
