@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
 export interface VeeamAlarm {
   client_id: number;
@@ -108,11 +109,12 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
     setDisplayCount(pageSize);
   }, [debouncedSearch, filterStatus, filterSeverity, filterEntityType, timeRange, customDateFrom, customDateTo, pageSize]);
 
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const fetchAlarms = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     
     try {
-      const response = await fetch(VEEAM_ALARMS_ENDPOINT);
+      const response = await authenticatedFetch(VEEAM_ALARMS_ENDPOINT);
       
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);

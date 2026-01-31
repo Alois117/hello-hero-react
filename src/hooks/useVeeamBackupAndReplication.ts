@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
 const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/backupandreplication";
 const REFRESH_INTERVAL = 5000; // 5 seconds
@@ -193,11 +194,12 @@ export const useVeeamBackupAndReplication = (): UseVeeamBackupReturn => {
   };
 
   // Fetch jobs from webhook
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const fetchJobs = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await authenticatedFetch(WEBHOOK_URL, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

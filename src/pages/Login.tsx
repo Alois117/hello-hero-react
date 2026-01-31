@@ -3,25 +3,41 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Lock, Loader2 } from "lucide-react";
-import { useAuth } from "@/keycloak";
+import { useKeycloak } from "@react-keycloak/web";           // ← use this hook
+import { useAuth } from "@/keycloak";                        // keep for isInitialized if needed
+import { decodeToken, isTokenExpired } from "@/keycloak/utils/tokenUtils";
 
 const Login = () => {
+  const { keycloak, initialized } = useKeycloak();          // ← now you get keycloak
+  const { isAuthenticated, login } = useAuth();             // optional – for consistency
   const navigate = useNavigate();
-  const { isAuthenticated, isInitialized, login } = useAuth();
 
-  // If already authenticated, hand off routing to AuthCallback
   useEffect(() => {
-    if (isInitialized && isAuthenticated) {
+    if (!initialized) return;
+
+    // Check if we have a stale/expired token
+    if (keycloak.token) {
+      const decoded = decodeToken(keycloak.token);
+      if (decoded && isTokenExpired(decoded)) {
+        console.debug('[Login] Detected expired token → forcing logout');
+        keycloak.logout({
+          redirectUri: `${window.location.origin}/login`,
+        });
+        return;
+      }
+    }
+
+    // If authenticated and token looks valid → proceed
+    if (keycloak.authenticated) {
       navigate("/auth/callback", { replace: true });
     }
-  }, [isInitialized, isAuthenticated, navigate]);
+  }, [initialized, keycloak, navigate]);
 
   const handleLogin = () => {
-    login();
+    login();  // or keycloak.login() — both work
   };
 
-  // While Keycloak initializes
-  if (!isInitialized) {
+  if (!initialized) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">
@@ -46,7 +62,6 @@ const Login = () => {
           style={{ animationDelay: "2s" }}
         />
       </div>
-
       {/* Grid Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div
@@ -60,7 +75,6 @@ const Login = () => {
           }}
         />
       </div>
-
       <div className="relative z-10 w-full max-w-md px-6 animate-fade-in">
         {/* Logo & Brand */}
         <div className="text-center mb-8">
@@ -80,7 +94,6 @@ const Login = () => {
             </div>
           </div>
         </div>
-
         {/* Login Card */}
         <Card className="glass-card border-border/50 p-8">
           <div className="space-y-6">
@@ -93,22 +106,19 @@ const Login = () => {
                 Sign in with your enterprise credentials to access the platform.
               </p>
             </div>
-
             <Button
               onClick={handleLogin}
               className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-background font-semibold py-6 rounded-xl glow-primary transition-all"
             >
               <Lock className="w-4 h-4 mr-2" />
-              Login with Keycloak
+              Login
             </Button>
-
             <div className="text-center text-xs text-muted-foreground">
               <p>Protected by enterprise-grade SSO</p>
               <p>OAuth 2.0 + PKCE Authentication</p>
             </div>
           </div>
         </Card>
-
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-muted-foreground">
           <p>Enterprise-Grade Monitoring • AI-Powered Insights</p>

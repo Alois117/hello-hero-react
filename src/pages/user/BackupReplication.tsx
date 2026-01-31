@@ -48,8 +48,10 @@ import TablePagination from "@/pages/user/backup-replication/components/shared/T
 import VmDrawer from "@/pages/user/backup-replication/components/VmDrawer";
 import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetailDrawer";
 import ChangeActivityDrawer from "@/pages/user/backup-replication/components/ChangeActivityDrawer";
+import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
-const ENDPOINT = "http://10.100.12.141:5678/webhook/backupandreplication";
+// const ENDPOINT = "http://10.100.12.141:5678/webhook/backupandreplication";
+const ENDPOINT = "http://localhost:5678/webhook/backupandreplication";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -200,19 +202,20 @@ const BackupReplication = () => {
 
   const loading = status === "loading";
 
+  const { authenticatedFetch } = useAuthenticatedFetch();
+
   const refresh = async (isSilent = false) => {
-    // Only show loading on initial load (not during silent auto-refresh)
-    if (!isSilent) {
-      setStatus("loading");
-    }
+    if (!isSilent) setStatus("loading");
     setError(null);
 
     try {
-      const res = await fetch(ENDPOINT, {
-        method: "GET",
+      const res = await authenticatedFetch(ENDPOINT, {
+        method: "POST",
         headers: { Accept: "application/json" },
       });
+
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
+
       const json: unknown = await res.json();
       setRaw(json);
       setLastUpdatedAt(new Date());
@@ -223,17 +226,9 @@ const BackupReplication = () => {
     }
   };
 
-  // Initial load (shows loading spinner)
   useEffect(() => {
-    void refresh(false); // false = show loading
-  }, []);
-
-  // Silent auto-refresh every 5 seconds (no loading, no UI change)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refresh(true); // true = silent (no loading overlay)
-    }, 5000); // 5 seconds – change to 10000 for 10s if preferred
-
+    refresh();
+    const interval = setInterval(() => refresh(true), 5000);
     return () => clearInterval(interval);
   }, []);
 

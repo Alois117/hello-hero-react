@@ -1,56 +1,33 @@
-/**
- * Authenticated Fetch Hook with Organization Scoping
- * 
- * SECURITY CRITICAL:
- * - Automatically attaches Authorization header
- * - Automatically attaches X-Organization-Id header for tenant isolation
- * - Super admin requests do NOT include X-Organization-Id
- */
-
 import { useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useOrganization } from '../context/OrganizationContext';
+import { decodeToken, isTokenExpired } from '../utils/tokenUtils';
 
 interface FetchOptions extends RequestInit {
-  /** Skip adding Authorization header */
   skipAuth?: boolean;
-  /** Skip adding X-Organization-Id header (use with caution) */
-  skipOrgHeader?: boolean;
 }
 
 export const useAuthenticatedFetch = () => {
-  const { token, isAuthenticated } = useAuth();
-  const { organizationId, isSuperAdmin } = useOrganization();
+  const { token, isAuthenticated, logout } = useAuth(); 
 
-  /**
-   * Fetch wrapper that automatically attaches auth and org headers.
-   * 
-   * Headers attached:
-   * - Authorization: Bearer <token> (if authenticated)
-   * - X-Organization-Id: <org-id> (if not super_admin and org exists)
-   */
   const authenticatedFetch = useCallback(
     async (url: string, options: FetchOptions = {}): Promise<Response> => {
-      const { 
-        skipAuth = false, 
-        skipOrgHeader = false,
-        headers: customHeaders, 
-        ...restOptions 
-      } = options;
-
+      const { skipAuth = false, headers: customHeaders, ...restOptions } = options;
       const headers = new Headers(customHeaders);
 
-      // Attach Authorization header if authenticated and not skipped
       if (!skipAuth && isAuthenticated && token) {
-        headers.set('Authorization', `Bearer ${token}`);
-      }
+        // Early validation: check if token is expired BEFORE sending request
+        const decoded = decodeToken(token);
+        if (decoded && isTokenExpired(decoded)) {
+          console.warn(`[useAuthenticatedFetch] Token expired for ${url} → forcing logout`);
+          
+          // Aggressive: immediately logout (hits Keycloak /logout + clears session)
+          logout(); 
 
-      // Attach X-Organization-Id header for tenant scoping
-      // - Only for non-super_admin users
-      // - Only if org validation passed and ID exists
-      // - Can be explicitly skipped if needed
-      if (!skipOrgHeader && !isSuperAdmin && organizationId) {
-        headers.set('X-Organization-Id', organizationId);
+          // Throw error so caller can handle (optional: you can also return early)
+          throw new Error('Token expired - authentication required. Redirecting to login...');
+        }
+
+        headers.set('Authorization', `Bearer ${token}`);
       }
 
       return fetch(url, {
@@ -58,15 +35,13 @@ export const useAuthenticatedFetch = () => {
         headers,
       });
     },
-    [token, isAuthenticated, organizationId, isSuperAdmin]
+    [token, isAuthenticated, logout] 
   );
 
-  return { 
+  return {
     authenticatedFetch,
-    /** Current organization ID (null for super_admin) */
-    organizationId,
-    /** Whether user is super_admin */
-    isSuperAdmin,
+    isAuthenticated,
+    token,
   };
 };
 

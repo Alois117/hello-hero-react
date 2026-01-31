@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
 export interface VeeamVMRawJson {
   json: {
@@ -139,11 +140,12 @@ export const useVeeamInfrastructure = (
     setCurrentPage(1);
   }, [debouncedSearch, filterPowerState, filterProtection, filterCategory]);
 
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const fetchVMs = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
 
     try {
-      const response = await fetch(VEEAM_VMS_ENDPOINT);
+      const response = await authenticatedFetch(VEEAM_VMS_ENDPOINT);
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);

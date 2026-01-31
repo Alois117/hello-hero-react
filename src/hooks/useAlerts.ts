@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
+import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+
 
 const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/ai/insights";
 // const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
@@ -168,13 +170,14 @@ export const useAlerts = (): UseAlertsReturn => {
     acknowledged: alerts.filter(a => a.acknowledged).length,
     total: alerts.length,
   };
-
+  
   // Fetch alerts from webhook
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const fetchAlerts = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await authenticatedFetch(WEBHOOK_URL, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

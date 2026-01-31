@@ -14,6 +14,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import {
   validateOrganizationMembership,
@@ -40,12 +41,10 @@ interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
 interface OrganizationProviderProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
-/**
- * Access Denied Screen - Shown when organization validation fails
- */
+//Access Denied Screen - Shown when organization validation fails
 const AccessDeniedScreen: React.FC<{ message: string; onLogout: () => void }> = ({
   message,
   onLogout,
@@ -76,9 +75,7 @@ const AccessDeniedScreen: React.FC<{ message: string; onLogout: () => void }> = 
   </div>
 );
 
-/**
- * Validating Organization Screen - Shown during validation
- */
+//Validating Organization Screen - Shown during validation
 const ValidatingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
     <div className="text-center space-y-4">
@@ -106,27 +103,14 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({
     }
 
     if (!isAuthenticated) {
-      // Not authenticated - reset state
       setValidationResult(null);
       setIsValidating(false);
       return;
     }
 
-    // Perform validation
     const result = validateOrganizationMembership(decodedToken, appRole);
     setValidationResult(result);
     setIsValidating(false);
-
-    // Log organization context (for debugging - remove in production if needed)
-    if (result.isValid && result.organization) {
-      console.info('[OrganizationContext] Organization validated:', {
-        id: result.organization.id,
-        displayName: result.organization.displayName,
-        role: appRole,
-      });
-    } else if (appRole === 'super_admin') {
-      console.info('[OrganizationContext] Super admin - organization bypass active');
-    }
   }, [isInitialized, isAuthenticated, decodedToken, appRole]);
 
   const contextValue = useMemo<OrganizationContextType>(() => {
@@ -148,11 +132,11 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({
     return <ValidatingScreen />;
   }
 
-  // Not authenticated - pass through (let ProtectedRoute handle it)
+  // Not authenticated - allow routing to proceed
   if (!isAuthenticated) {
     return (
       <OrganizationContext.Provider value={contextValue}>
-        {children}
+        {children ?? <Outlet />}
       </OrganizationContext.Provider>
     );
   }
@@ -169,7 +153,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({
 
   return (
     <OrganizationContext.Provider value={contextValue}>
-      {children}
+      {children ?? <Outlet />}
     </OrganizationContext.Provider>
   );
 };

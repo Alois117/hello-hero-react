@@ -68,21 +68,22 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <OrganizationProvider>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                <Route path="/terms-of-use" element={<TermsOfUse />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/2fa/setup" element={<TwoFASetup />} />
-                <Route path="/2fa/verify" element={<TwoFAVerify />} />
-                <Route path="/auth/callback" element={<AuthCallback />} />
+            <Routes>
 
-                {/* User Routes */}
+              {/* Public Routes */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-use" element={<TermsOfUse />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/2fa/setup" element={<TwoFASetup />} />
+              <Route path="/2fa/verify" element={<TwoFAVerify />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
+              {/* Protected Routes */}
+              <Route element={<OrganizationProvider />}>
                 <Route path="/dashboard" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserDashboard /></ProtectedRoute>} />
                 <Route path="/dashboard/zabbix" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserZabbix /></ProtectedRoute>} />
                 <Route path="/dashboard/hosts/:id" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserHostDetail /></ProtectedRoute>} />
@@ -92,7 +93,6 @@ const App = () => (
                 <Route path="/dashboard/reports" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserReports /></ProtectedRoute>} />
                 <Route path="/dashboard/settings" element={<ProtectedRoute requiredRole="user" redirectTo="/auth/callback"><UserSettings /></ProtectedRoute>} />
 
-                {/* Org Admin Routes */}
                 <Route path="/admin" element={<ProtectedRoute requiredRole="org_admin"><OrgAdminDashboard /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute requiredRole="org_admin"><UserManagement /></ProtectedRoute>} />
                 <Route path="/admin/billing" element={<ProtectedRoute requiredRole="org_admin"><Billing /></ProtectedRoute>} />
@@ -104,7 +104,6 @@ const App = () => (
                 <Route path="/admin/maintenance" element={<ProtectedRoute requiredRole="org_admin"><MaintenanceWindows /></ProtectedRoute>} />
                 <Route path="/admin/ai" element={<ProtectedRoute requiredRole="org_admin"><AISettings /></ProtectedRoute>} />
 
-                {/* Super Admin Routes */}
                 <Route path="/super-admin" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
                 <Route path="/super-admin/organizations" element={<ProtectedRoute requiredRole="super_admin"><Organizations /></ProtectedRoute>} />
                 <Route path="/super-admin/analytics" element={<ProtectedRoute requiredRole="super_admin"><GlobalAnalytics /></ProtectedRoute>} />
@@ -113,14 +112,14 @@ const App = () => (
                 <Route path="/super-admin/aiml" element={<ProtectedRoute requiredRole="super_admin"><AIMLPerformance /></ProtectedRoute>} />
                 <Route path="/super-admin/features" element={<ProtectedRoute requiredRole="super_admin"><FeatureFlagsPage /></ProtectedRoute>} />
                 <Route path="/super-admin/reseller" element={<ProtectedRoute requiredRole="super_admin"><ResellerPortal /></ProtectedRoute>} />
+              </Route>
 
-                {/* Fallback */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <Route path="*" element={<NotFound />} />
 
-              <CommandPalette />
-              <FloatingAIChatWrapper />
-            </OrganizationProvider>
+            </Routes>
+
+            <CommandPalette />
+            <FloatingAIChatWrapper />
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
