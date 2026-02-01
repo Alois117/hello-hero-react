@@ -1,38 +1,36 @@
 import { useState } from "react";
-import { useSelector } from "react-redux";
 import UserLayout from "@/layouts/UserLayout";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Search,
   Server,
-  AlertCircle,
   CheckCircle,
-  Loader2,
   Wifi,
   WifiOff,
   AlertTriangle,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import {
-  selectHosts,
-  selectHostsLoading,
-  selectHostsError,
-} from "@/store/slices/hostsSlice";
-import { useHosts } from "@/hooks/useHosts";
+import { Input } from "@/components/ui/input";
+
+// Alerts imports
 import { useAlerts } from "@/hooks/useAlerts";
 import AlertsTable from "@/components/alerts/AlertsTable";
 import AlertFilters from "@/components/alerts/AlertFilters";
 import AlertSummaryCards from "@/components/alerts/AlertSummaryCards";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 
-const Zabbix = () => {
-  const navigate = useNavigate();
+// Zabbix Hosts imports
+import { useZabbixHosts } from "@/hooks/useZabbixHosts";
+import {
+  ZabbixHostsSummaryCards,
+  ZabbixHostsFilters,
+  ZabbixHostsTable,
+} from "@/components/zabbix/hosts";
 
-  // Alerts state
+const Zabbix = () => {
+  // ────────────────────────────────────────────────
+  // Alerts State & Data
+  // ────────────────────────────────────────────────
   const [selectedSeverities, setSelectedSeverities] = useState<AlertSeverity[]>([
     "disaster",
     "high",
@@ -43,43 +41,42 @@ const Zabbix = () => {
   const [showAcknowledged, setShowAcknowledged] = useState(true);
   const [alertSearchQuery, setAlertSearchQuery] = useState("");
 
-  // Hosts state
-  const [hostSearchQuery, setHostSearchQuery] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const {
+    alerts,
+    loading: alertsLoading,
+    counts: alertCounts,
+    isConnected: alertsConnected,
+    lastUpdated: alertsLastUpdated,
+  } = useAlerts();
 
-  // Fetch alerts data
-  const { alerts, loading: alertsLoading, counts, isConnected, lastUpdated } = useAlerts();
+  // ────────────────────────────────────────────────
+  // Zabbix Hosts State & Data
+  // ────────────────────────────────────────────────
+  const {
+    paginatedHosts,
+    loading: hostsLoading,
+    error: hostsError,
+    counts: hostCounts,
+    isConnected: hostsConnected,
+    lastUpdated: hostsLastUpdated,
+    searchQuery: hostSearchQuery,
+    setSearchQuery: setHostSearchQuery,
+    selectedGroup,
+    setSelectedGroup,
+    statusFilter,
+    setStatusFilter,
+    clearFilters,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    totalPages,
+    hosts: filteredHosts,
+    uniqueGroups,
+  } = useZabbixHosts(10);
 
-  // Fetch hosts data
-  useHosts();
-  const hosts = useSelector(selectHosts);
-  const isHostsLoading = useSelector(selectHostsLoading);
-  const hostsError = useSelector(selectHostsError);
-
-  const mappedHosts = hosts.map((host) => ({
-    id: host.hostid,
-    name: host.hostname ?? "",
-    ip: host.ip ?? "",
-    status: "online",
-    problems: 0,
-    group: host.hostgroup ?? "",
-  }));
-
-  const groups = Array.from(
-    new Set(hosts.flatMap((h) => h.hostgroups ?? []))
-  );
-
-  const hostQuery = hostSearchQuery.toLowerCase();
-
-  const filteredHosts = mappedHosts.filter((host) => {
-    const name = (host.name ?? "").toLowerCase();
-    const ip = (host.ip ?? "").toLowerCase();
-
-    const matchesSearch = name.includes(hostQuery) || ip.includes(hostQuery);
-    const matchesGroup = !selectedGroup || host.group === selectedGroup;
-
-    return matchesSearch && matchesGroup;
-  });
+  // Check if any host filters are active
+  const hasActiveHostFilters =
+    hostSearchQuery !== "" || selectedGroup !== null || statusFilter !== "all";
 
   return (
     <UserLayout>
@@ -87,9 +84,7 @@ const Zabbix = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">
-              Zabbix
-            </h1>
+            <h1 className="text-3xl font-bold">Zabbix</h1>
             <p className="text-muted-foreground mt-1">
               Manage Zabbix alerts and monitored hosts
             </p>
@@ -109,14 +104,18 @@ const Zabbix = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Alerts Tab */}
+          {/* ═══════════════════════════════════════════════════════════════════
+              ALERTS TAB
+          ═══════════════════════════════════════════════════════════════════ */}
           <TabsContent value="alerts" className="space-y-6 mt-6">
             {/* Alerts Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
-                <p className="text-muted-foreground">{counts.total} active alerts</p>
+                <p className="text-muted-foreground">
+                  {alertCounts.total} active alerts
+                </p>
                 <div className="flex items-center gap-1 text-xs">
-                  {isConnected ? (
+                  {alertsConnected ? (
                     <>
                       <Wifi className="w-3 h-3 text-success" />
                       <span className="text-success">Live</span>
@@ -128,9 +127,9 @@ const Zabbix = () => {
                     </>
                   )}
                 </div>
-                {lastUpdated && (
+                {alertsLastUpdated && (
                   <span className="text-xs text-muted-foreground">
-                    Updated: {lastUpdated.toLocaleTimeString()}
+                    Updated: {alertsLastUpdated.toLocaleTimeString()}
                   </span>
                 )}
               </div>
@@ -141,7 +140,7 @@ const Zabbix = () => {
             </div>
 
             {/* Summary Cards */}
-            <AlertSummaryCards counts={counts} />
+            <AlertSummaryCards counts={alertCounts} />
 
             {/* Search and Filters */}
             <div className="flex gap-3">
@@ -172,87 +171,66 @@ const Zabbix = () => {
             />
           </TabsContent>
 
-          {/* Hosts Tab */}
+          {/* ═══════════════════════════════════════════════════════════════════
+              HOSTS TAB - Real data from webhook with silent auto-refresh
+          ═══════════════════════════════════════════════════════════════════ */}
           <TabsContent value="hosts" className="space-y-6 mt-6">
-            <Card className="p-6">
-              <div className="flex gap-4 mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search hosts..."
-                    value={hostSearchQuery}
-                    onChange={(e) => setHostSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 mb-6 flex-wrap">
-                <Button
-                  variant={!selectedGroup ? "default" : "outline"}
-                  onClick={() => setSelectedGroup(null)}
-                >
-                  All
-                </Button>
-                {groups.map((group) => (
-                  <Button
-                    key={group}
-                    variant={selectedGroup === group ? "default" : "outline"}
-                    onClick={() => setSelectedGroup(group)}
-                  >
-                    {group}
-                  </Button>
-                ))}
-              </div>
-
-              {isHostsLoading && hosts.length === 0 && (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                </div>
-              )}
-
-              {hostsError && hosts.length === 0 && (
-                <div className="flex justify-center py-12 text-destructive">
-                  <AlertCircle className="w-5 h-5 mr-2" />
-                  {hostsError}
-                </div>
-              )}
-
-              {hosts.length > 0 && (
-                <div className="space-y-3">
-                  {filteredHosts.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      No hosts found.
-                    </div>
+            {/* Hosts Header - Mirrors Alerts header layout */}
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <p className="text-muted-foreground">
+                  {hostCounts.total} monitored hosts
+                </p>
+                {/* Connection status indicator - same as Alerts */}
+                <div className="flex items-center gap-1 text-xs">
+                  {hostsConnected ? (
+                    <>
+                      <Wifi className="w-3 h-3 text-success" />
+                      <span className="text-success">Live</span>
+                    </>
                   ) : (
-                    filteredHosts.map((host) => (
-                      <div
-                        key={host.id}
-                        onClick={() => navigate(`/dashboard/hosts/${host.id}`)}
-                        className="flex justify-between p-4 border rounded-lg cursor-pointer hover:border-primary transition-colors"
-                      >
-                        <div className="flex gap-4">
-                          <Server className="text-muted-foreground" />
-                          <div>
-                            <h3 className="font-semibold">{host.name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {host.ip || "—"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {host.group}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge className="px-2 py-0.5 text-xs h-6">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          online
-                        </Badge>
-                      </div>
-                    ))
+                    <>
+                      <WifiOff className="w-3 h-3 text-destructive" />
+                      <span className="text-destructive">Offline</span>
+                    </>
                   )}
                 </div>
-              )}
-            </Card>
+                {/* Last updated timestamp - same format as Alerts */}
+                {hostsLastUpdated && (
+                  <span className="text-xs text-muted-foreground">
+                    Updated: {hostsLastUpdated.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Summary Cards - Read-only, non-clickable */}
+            <ZabbixHostsSummaryCards counts={hostCounts} />
+
+            {/* Search & Filters */}
+            <ZabbixHostsFilters
+              searchQuery={hostSearchQuery}
+              onSearchChange={setHostSearchQuery}
+              selectedGroup={selectedGroup}
+              onGroupChange={setSelectedGroup}
+              statusFilter={statusFilter}
+              onStatusChange={setStatusFilter}
+              uniqueGroups={uniqueGroups}
+              onClearFilters={clearFilters}
+              hasActiveFilters={hasActiveHostFilters}
+            />
+
+            {/* Hosts Table with Pagination */}
+            <ZabbixHostsTable
+              hosts={paginatedHosts}
+              loading={hostsLoading}
+              error={hostsError}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalHosts={filteredHosts.length}
+              onPageChange={setCurrentPage}
+            />
           </TabsContent>
         </Tabs>
       </div>
