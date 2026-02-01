@@ -3,54 +3,70 @@ import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
-
-const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/ai/insights";
-// const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
+const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
+// ────────────────────────────────────────────────
+// Updated interface – all nested fields are optional
+// ────────────────────────────────────────────────
 export interface WebhookAlert {
-  zbx_event_id: string;
-  raw: {
-    name: string;
-    clock: string;
-    eventid: string;
-    r_clock: string;
-    objectid: string;
-    severity: string;
-  };
-  created_at: string;
-  dedupe_key: string;
-  first_seen: string;
-  last_seen: string;
-  first_event_id: string;
-  latest_event_id: string;
-  last_sent_at: string;
-  times_sent: number;
+  client_id: number;
   first_ai_response: string;
+  created_at: string;
+  updated_at: string;
+  zbx_raw?: {
+    clock?: number;
+    eventid?: string;
+    started?: string;
+    objectid?: string;
+    severity?: string;
+    client_id?: number;
+    raw_event?: {
+      name?: string;
+      clock?: string;
+      eventid?: string;
+      r_clock?: string;
+      objectid?: string;
+      severity?: string;
+    };
+    dedupe_key?: string;
+    description?: string;
+    problem_name?: string;
+    severity_num?: number;
+    update_fetch_time?: number;
+  };
+  first_seen: string;
+  seen_count: number;
+  last_seen_at: string;
+  times_sent: number;
   reminder_interval_hours?: number;
+  // Direct top-level fallbacks (sometimes present)
+  dedupe_key?: string;
+  description?: string;
+  name?: string;
+  severity?: string;
+  eventid?: string;
+  clock?: number;
 }
 
-// Map Zabbix severity (0-5) to our AlertSeverity
-const mapSeverity = (zbxSeverity: string): AlertSeverity => {
-  const level = parseInt(zbxSeverity, 10);
-  switch (level) {
-    case 5: return "disaster";
-    case 4: return "high";
-    case 3: return "average";
-    case 2: return "warning";
-    case 1: return "info";
-    case 0: return "info";
-    default: return "info";
-  }
+// Map severity string → our AlertSeverity enum
+const mapSeverity = (severity: string | undefined): AlertSeverity => {
+  if (!severity) return "info";
+  const s = severity.toLowerCase();
+  if (s.includes("disaster")) return "disaster";
+  if (s.includes("high")) return "high";
+  if (s.includes("average")) return "average";
+  if (s.includes("warning")) return "warning";
+  return "info";
 };
 
-// Parse duration from timestamps (uses lastSeen for reoccurring alerts)
+// Calculate duration using last_seen_at
 const calculateDuration = (lastSeen: string): string => {
   const last = new Date(lastSeen);
   const now = new Date();
   const diffMs = now.getTime() - last.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  
+
   if (diffMins < 60) return `${diffMins}m`;
   const hours = Math.floor(diffMins / 60);
   const mins = diffMins % 60;
@@ -59,77 +75,117 @@ const calculateDuration = (lastSeen: string): string => {
   return `${days}d ${hours % 24}h`;
 };
 
-// Extract category from problem name
-const extractCategory = (name: string): string => {
-  if (name.toLowerCase().includes("vmware")) return "VMware";
-  if (name.toLowerCase().includes("disk")) return "Disk";
-  if (name.toLowerCase().includes("cpu")) return "CPU";
-  if (name.toLowerCase().includes("memory")) return "Memory";
-  if (name.toLowerCase().includes("network")) return "Network";
-  if (name.toLowerCase().includes("database") || name.toLowerCase().includes("db")) return "Database";
-  if (name.toLowerCase().includes("service")) return "Service";
+// Extract category from name/description
+const extractCategory = (name: string = "", description: string = ""): string => {
+  const text = (name + " " + description).toLowerCase();
+  if (text.includes("vmware")) return "VMware";
+  if (text.includes("disk")) return "Disk";
+  if (text.includes("cpu")) return "CPU";
+  if (text.includes("memory")) return "Memory";
+  if (text.includes("network")) return "Network";
+  if (text.includes("database") || text.includes("db")) return "Database";
+  if (text.includes("service")) return "Service";
   return "System";
 };
 
-// Extract host from AI response or use default
-const extractHost = (aiResponse: string, dedupeKey: string): string => {
-  // Try to extract host from AI response
+// Extract host – prefer AI response pattern **Host:** …
+const extractHost = (aiResponse: string, dedupeKey: string = ""): string => {
   const hostMatch = aiResponse.match(/\*\*Host:\*\*\s*([^\n.]+)/i);
   if (hostMatch) return hostMatch[1].trim();
-  
-  // Fallback: use dedupe_key prefix
-  const parts = dedupeKey.split("_");
-  return parts[0] || "unknown-host";
+
+  // Fallback: first meaningful part of dedupe_key
+  const parts = dedupeKey.split(/[_-]/);
+  return parts[0] && parts[0] !== "" ? parts[0] : "unknown-host";
 };
 
-// Transform webhook data to our Alert format
+// ────────────────────────────────────────────────
+// Transform webhook → our Alert format
+// ────────────────────────────────────────────────
 const transformWebhookAlert = (webhook: WebhookAlert): Alert => {
-  const severity = mapSeverity(webhook.raw.severity);
-  const acknowledged = webhook.raw.r_clock !== "0";
-  
+  const raw      = webhook.zbx_raw ?? {};
+  const rawEvent = raw.raw_event ?? {};
+
+  // Gather name/problem from multiple possible locations
+  const name =
+    raw.problem_name ??
+    raw.description ??
+    rawEvent.name ??
+    webhook.description ??
+    webhook.name ??
+    "Unknown Problem";
+
+  // Severity – prefer most specific source
+  const severityStr =
+    raw.severity ??
+    rawEvent.severity ??
+    webhook.severity ??
+    "info";
+
+  const dedupeKey =
+    webhook.dedupe_key ??
+    raw.dedupe_key ??
+    "";
+
+  const eventId =
+    webhook.eventid ??
+    raw.eventid ??
+    rawEvent.eventid ??
+    "0";
+
+  const clock =
+    webhook.clock ??
+    raw.clock ??
+    rawEvent.clock ??
+    0;
+
+  const severity = mapSeverity(severityStr);
+  const acknowledged = !!(rawEvent.r_clock && rawEvent.r_clock !== "0");
+
   return {
-    id: parseInt(webhook.zbx_event_id, 10),
+    id: parseInt(eventId, 10),
     severity,
-    host: extractHost(webhook.first_ai_response, webhook.dedupe_key),
-    category: extractCategory(webhook.raw.name),
-    problem: webhook.raw.name,
-    duration: calculateDuration(webhook.last_seen),
+    host: extractHost(webhook.first_ai_response, dedupeKey),
+    category: extractCategory(name, webhook.description ?? raw.description ?? rawEvent.name ?? ""),
+    problem: name,
+    duration: calculateDuration(webhook.last_seen_at),
     scope: "Production",
     acknowledged,
     status: acknowledged ? "acknowledged" : "active",
     timestamp: new Date(webhook.created_at).toLocaleString(),
-    // Extended fields for detail drawer
+    // Extended fields for drawer / details
     aiInsights: webhook.first_ai_response,
     timesSent: webhook.times_sent,
     firstSeen: webhook.first_seen,
-    lastSeen: webhook.last_seen,
-    dedupeKey: webhook.dedupe_key,
-    rawMetadata: webhook.raw,
+    lastSeen: webhook.last_seen_at,
+    dedupeKey,
+    rawMetadata: { ...raw, ...rawEvent },
   };
 };
 
-// Sort alerts by timestamp descending (newest first)
+// Sort newest → oldest (prefer last_seen_at > created_at > clock)
 const sortAlertsDescending = (alerts: Alert[]): Alert[] => {
   return [...alerts].sort((a, b) => {
-    // Use lastSeen, fallback to firstSeen, then timestamp
     const getTime = (alert: Alert): number => {
+      // 1. Prefer lastSeen
       if (alert.lastSeen) {
-        const date = new Date(alert.lastSeen);
-        if (!isNaN(date.getTime())) return date.getTime();
+        const d = new Date(alert.lastSeen);
+        if (!isNaN(d.getTime())) return d.getTime();
       }
-      if (alert.firstSeen) {
-        const date = new Date(alert.firstSeen);
-        if (!isNaN(date.getTime())) return date.getTime();
+      // 2. Then timestamp (created_at)
+      if (alert.timestamp) {
+        const d = new Date(alert.timestamp);
+        if (!isNaN(d.getTime())) return d.getTime();
       }
-      // Fallback to raw clock (epoch seconds)
-      if (alert.rawMetadata?.clock) {
-        const epoch = parseInt(alert.rawMetadata.clock, 10);
+      // 3. Fallback to raw clock (epoch seconds → ms)
+      const rawClock = (alert.rawMetadata as any)?.clock;
+      if (rawClock) {
+        const epoch = typeof rawClock === "number" ? rawClock : parseInt(rawClock, 10);
         if (!isNaN(epoch)) return epoch * 1000;
       }
-      return 0; // Preserve order if no valid timestamp
+      return 0;
     };
-    
-    return getTime(b) - getTime(a); // Descending order
+
+    return getTime(b) - getTime(a);
   });
 };
 
@@ -161,24 +217,23 @@ export const useAlerts = (): UseAlertsReturn => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const alertsMapRef = useRef<Map<number, Alert>>(new Map());
 
-  // Calculate counts from alerts
   const counts: AlertCounts = {
-    disaster: alerts.filter(a => a.severity === "disaster").length,
-    high: alerts.filter(a => a.severity === "high").length,
-    average: alerts.filter(a => a.severity === "average").length,
-    warning: alerts.filter(a => a.severity === "warning").length,
-    acknowledged: alerts.filter(a => a.acknowledged).length,
+    disaster: alerts.filter((a) => a.severity === "disaster").length,
+    high: alerts.filter((a) => a.severity === "high").length,
+    average: alerts.filter((a) => a.severity === "average").length,
+    warning: alerts.filter((a) => a.severity === "warning").length,
+    acknowledged: alerts.filter((a) => a.acknowledged).length,
     total: alerts.length,
   };
-  
-  // Fetch alerts from webhook
+
   const { authenticatedFetch } = useAuthenticatedFetch();
+
   const fetchAlerts = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      
+
       const response = await authenticatedFetch(WEBHOOK_URL, {
-        method: "GET",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
@@ -189,28 +244,28 @@ export const useAlerts = (): UseAlertsReturn => {
       }
 
       const data = await response.json();
-      
-      // Handle both array and single object responses
       const webhookAlerts: WebhookAlert[] = Array.isArray(data) ? data : [data];
-      
-      // Transform to our format
-      const transformedAlerts = webhookAlerts.map(transformWebhookAlert);
-      
-      // Smart merge: only update changed alerts to avoid flicker
-      const newAlertsMap = new Map<number, Alert>();
-      transformedAlerts.forEach(alert => {
+
+      // Transform & filter out obviously invalid entries
+      const transformed = webhookAlerts
+        .filter((w) => w.first_ai_response && w.last_seen_at)
+        .map(transformWebhookAlert);
+
+      // Merge strategy – only update changed items (prevents UI flicker)
+      const newMap = new Map<number, Alert>();
+      transformed.forEach((alert) => {
         const existing = alertsMapRef.current.get(alert.id);
         if (!existing || JSON.stringify(existing) !== JSON.stringify(alert)) {
-          newAlertsMap.set(alert.id, alert);
+          newMap.set(alert.id, alert);
         } else {
-          newAlertsMap.set(alert.id, existing);
+          newMap.set(alert.id, existing);
         }
       });
-      
-      alertsMapRef.current = newAlertsMap;
-      // Sort by timestamp descending (newest first) before setting state
-      const sortedAlerts = sortAlertsDescending(Array.from(newAlertsMap.values()));
-      setAlerts(sortedAlerts);
+
+      alertsMapRef.current = newMap;
+      const sorted = sortAlertsDescending(Array.from(newMap.values()));
+
+      setAlerts(sorted);
       setIsConnected(true);
       setLastUpdated(new Date());
       setError(null);
@@ -221,42 +276,20 @@ export const useAlerts = (): UseAlertsReturn => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [authenticatedFetch]);
 
   // Initial fetch
   useEffect(() => {
     fetchAlerts(false);
   }, [fetchAlerts]);
 
-  // Set up auto-refresh every 5 seconds (silent refresh)
+  // Auto-refresh
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      fetchAlerts(true);
-    }, REFRESH_INTERVAL);
-
+    intervalRef.current = setInterval(() => fetchAlerts(true), REFRESH_INTERVAL);
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [fetchAlerts]);
-
-  // WebSocket simulation layer - ready for future upgrade
-  useEffect(() => {
-    // When endpoint supports WebSocket, implement here:
-    // const ws = new WebSocket('ws://10.100.12.141:5678/ws/alerts');
-    // ws.onmessage = (event) => {
-    //   const newAlert = JSON.parse(event.data);
-    //   // Smart merge into alerts
-    // };
-    
-    // For now, polling simulates real-time behavior
-    console.log("[WebSocket] Simulated connection active - using polling fallback");
-    
-    return () => {
-      console.log("[WebSocket] Simulated connection closed");
-    };
-  }, []);
 
   const refresh = useCallback(async () => {
     await fetchAlerts(false);

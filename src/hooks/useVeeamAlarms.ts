@@ -71,7 +71,7 @@ interface UseVeeamAlarmsReturn {
   entityTypes: string[];
 }
 
-const VEEAM_ALARMS_ENDPOINT = "http://10.100.12.141:5678/webhook/veeamone_b&r_alarms";
+const VEEAM_ALARMS_ENDPOINT = "http://localhost:5678/webhook/alarms";
 const REFRESH_INTERVAL = 5000;
 
 export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAlarmsReturn => {
@@ -114,15 +114,62 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
     if (!silent) setLoading(true);
     
     try {
-      const response = await authenticatedFetch(VEEAM_ALARMS_ENDPOINT);
+      const response = await authenticatedFetch(VEEAM_ALARMS_ENDPOINT, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
       }
 
       const data = await response.json();
-      const alarmsArray = Array.isArray(data) ? data : [data];
-      
+      const alarmsArray = data
+        .map((item: any) => {
+          if (typeof item !== "object" || item === null) return null;
+          const outerKey = Object.keys(item)[0];
+          if (!outerKey) return null;
+          const inner = item[outerKey];
+          if (!inner) return null;
+
+          const severityMap: { [key: string]: AlarmSeverity } = {
+            Error: "Critical",
+            Warning: "Warning",
+            Information: "Info",
+            High: "High",
+            Resolved: "Info",
+          };
+
+          const mappedSeverity = severityMap[outerKey] || "Unknown";
+
+          const isResolved =
+            outerKey === "Resolved" ||
+            (inner.description || "").toLowerCase().includes("back to normal");
+
+          const mappedStatus: AlarmStatus = isResolved ? "Resolved" : "Active";
+
+          return {
+            client_id: inner.client_id,
+            alarm_id: inner.triggered_alarm_id,
+            dedupe_key: inner.dedupe_key,
+            name: inner.alarm_name,
+            description: inner.description,
+            severity: mappedSeverity,
+            status: mappedStatus,
+            entity_type: inner.object_type,
+            entity_name: inner.object_name,
+            triggered_at: inner.triggered_time,
+            resolved_at: inner.resolved_at,
+            first_seen: inner.first_seen,
+            last_seen: inner.last_seen,
+            seen_count: inner.repeat_count,
+            times_sent: 0, // Default, as not present in new structure
+            reminder_interval: undefined,
+            first_ai_response: inner.comment || undefined,
+          } as VeeamAlarm;
+        })
+        .filter(Boolean); // Remove any null entries
+
       setAlarms(alarmsArray);
       setIsConnected(true);
       setLastUpdated(new Date());

@@ -135,42 +135,42 @@ const UserInsights = () => {
     <UserLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <Lightbulb className="w-6 h-6 text-primary glow-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">AI Insights</h1>
-              <p className="text-muted-foreground text-sm md:text-base">
-                Intelligent recommendations and predictions
-              </p>
-            </div>
-          </div>
+<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  <div className="flex items-center gap-3">
+    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+      <Lightbulb className="w-6 h-6 text-primary glow-primary" />
+    </div>
+    <div>
+      <h1 className="text-2xl md:text-3xl font-bold">AI Insights</h1>
+      <p className="text-muted-foreground text-sm md:text-base">
+        Intelligent recommendations and predictions
+      </p>
+    </div>
+  </div>
 
-          {/* Status indicator + timestamp - no refresh button */}
-          <div className="flex items-center gap-3 text-sm">
-            {isConnected ? (
-              <Wifi className="w-4 h-4 text-success" />
-            ) : (
-              <WifiOff className="w-4 h-4 text-error" />
-            )}
-            
-            {lastUpdated && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>Updated:</span>
-                <span className="font-medium">
-                  {lastUpdated.toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    second: "2-digit",
-                    hour12: true,
-                  })}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+  {/* Status indicator + timestamp - no refresh button */}
+  <div className="flex items-center gap-3 text-sm">
+    {isConnected ? (
+      <Wifi className="w-4 h-4 text-success" />
+    ) : (
+      <WifiOff className="w-4 h-4 text-error" />
+    )}
+    
+    {lastUpdated && (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <span>Updated:</span>
+        <span className="font-medium">
+          {lastUpdated.toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          })}
+        </span>
+      </div>
+    )}
+  </div>
+</div>
 
         {/* Only the new summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6">

@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 
 export interface VeeamVMRawJson {
-  json: {
-    name: string | null | undefined;
-    vmId: number;
-    moRef: string;
+  vm_metrics: {
     notes: string | null;
     guestOs: string;
     category: string;
@@ -21,7 +18,7 @@ export interface VeeamVMRawJson {
     connectionState: string;
     memorySizeHuman: string;
     guestIpAddresses: string[];
-    guestUsedPercent: number;
+    guestUsedPercent: number | null;
     lastProtectedDate: string | null;
     guestTotalFreeBytes: number;
     guestTotalFreeHuman: string;
@@ -41,7 +38,7 @@ export interface VeeamVMRawJson {
       datastoreMoRef: string;
       uncommittedBytes: number;
     }>;
-    guestUsedPercentHuman: string;
+    guestUsedPercentHuman: string | null;
     protectionJobUidsCount: number;
     guestTotalCapacityBytes: number;
     guestTotalCapacityHuman: string;
@@ -53,11 +50,20 @@ export interface VeeamVMRawJson {
 
 export interface VeeamVM {
   client_id: number;
-  client_name: string;
-  VM_id: string;
+  vmid: string;
   fetch_time: string;
   Category: string;
-  raw_json: VeeamVMRawJson;
+  raw_json: {
+    client_id: number;
+    vmid: string;
+    moref: string;
+    vm_name: string;
+    vm_metrics: VeeamVMRawJson["vm_metrics"];
+    ai_response_client_id: null;
+    ai_response_id: null;
+    created_at: string;
+    updated_at: string;
+  };
 }
 
 export type PowerState = "PoweredOn" | "PoweredOff";
@@ -103,7 +109,7 @@ interface UseVeeamInfrastructureReturn {
   };
 }
 
-const VEEAM_VMS_ENDPOINT = "http://10.100.12.141:5678/webhook/veeamone_vms";
+const VEEAM_VMS_ENDPOINT = "http://localhost:5678/webhook/veeamone_vms";
 const REFRESH_INTERVAL = 10000;
 
 export const useVeeamInfrastructure = (
@@ -145,7 +151,10 @@ export const useVeeamInfrastructure = (
     if (!silent) setLoading(true);
 
     try {
-      const response = await authenticatedFetch(VEEAM_VMS_ENDPOINT);
+      const response = await authenticatedFetch(VEEAM_VMS_ENDPOINT, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
@@ -184,7 +193,8 @@ export const useVeeamInfrastructure = (
   const filteredVMs = useMemo(() => {
     return vms
       .filter((vm) => {
-        const raw = vm.raw_json?.json;
+        const raw = vm.raw_json?.vm_metrics;
+        const name = vm.raw_json?.vm_name;
 
         // Skip entries that don't have the expected nested structure
         if (!raw) return false;
@@ -192,7 +202,7 @@ export const useVeeamInfrastructure = (
         // Search filter - by VM name, DNS name, or IP address
         if (debouncedSearch) {
           const search = debouncedSearch.toLowerCase();
-          const matchesName = (raw.name ?? "").toLowerCase().includes(search);
+          const matchesName = (name ?? "").toLowerCase().includes(search);
           const matchesDns = (raw.guestDnsName ?? "").toLowerCase().includes(search);
           const matchesIp = (raw.guestIpAddresses ?? []).some((ip) =>
             ip.toLowerCase().includes(search)
@@ -219,8 +229,8 @@ export const useVeeamInfrastructure = (
       })
       .sort((a, b) => {
         // Sort by name alphabetically - safe against null/undefined
-        const nameA = a.raw_json?.json?.name ?? "";
-        const nameB = b.raw_json?.json?.name ?? "";
+        const nameA = a.raw_json?.vm_name ?? "";
+        const nameB = b.raw_json?.vm_name ?? "";
         return nameA.localeCompare(nameB);
       });
   }, [vms, debouncedSearch, filterPowerState, filterProtection, filterCategory]);
@@ -259,10 +269,10 @@ export const useVeeamInfrastructure = (
   const counts = useMemo(() => {
     return {
       total: vms.length,
-      poweredOn: vms.filter((vm) => vm.raw_json?.json?.powerState === "PoweredOn").length,
-      poweredOff: vms.filter((vm) => vm.raw_json?.json?.powerState === "PoweredOff").length,
-      protected: vms.filter((vm) => vm.raw_json?.json?.isProtected === true).length,
-      unprotected: vms.filter((vm) => vm.raw_json?.json?.isProtected === false).length,
+      poweredOn: vms.filter((vm) => vm.raw_json?.vm_metrics?.powerState === "PoweredOn").length,
+      poweredOff: vms.filter((vm) => vm.raw_json?.vm_metrics?.powerState === "PoweredOff").length,
+      protected: vms.filter((vm) => vm.raw_json?.vm_metrics?.isProtected === true).length,
+      unprotected: vms.filter((vm) => vm.raw_json?.vm_metrics?.isProtected === false).length,
     };
   }, [vms]);
 

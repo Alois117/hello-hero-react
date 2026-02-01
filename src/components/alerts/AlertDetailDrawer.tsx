@@ -28,45 +28,18 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-
-interface AlertDetail {
-  id: number;
-  severity: AlertSeverity;
-  host: string;
-  category: string;
-  problem: string;
-  duration: string;
-  acknowledged: boolean;
-  timestamp: string;
-  // Extended fields from webhook
-  aiInsights?: string;
-  timesSent?: number;
-  firstSeen?: string;
-  lastSeen?: string;
-  dedupeKey?: string;
-  rawMetadata?: {
-    name: string;
-    clock: string;
-    eventid: string;
-    r_clock: string;
-    objectid: string;
-    severity: string;
-  };
-}
+import { Alert } from "./AlertsTable";   // ← Import the shared Alert type
 
 interface AlertDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  alert: AlertDetail | null;
+  alert: Alert | null;   // ← Now uses the same Alert type (rawMetadata is optional)
 }
 
-// Parse markdown-style AI response
+// Parse markdown-style AI response (unchanged)
 const parseAIInsights = (aiResponse: string) => {
   if (!aiResponse) return null;
-  
-  // Clean up the response
   const cleaned = aiResponse.trim();
-  
   return cleaned;
 };
 
@@ -105,7 +78,7 @@ const AlertDetailDrawer = ({
     });
   };
 
-  // Calculate duration display
+  // Calculate duration display (unchanged)
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleString();
@@ -178,21 +151,49 @@ const AlertDetailDrawer = ({
             </Button>
           </div>
 
-          {/* Raw Metadata */}
+          {/* Raw Metadata – now safe with optional chaining */}
           <div className="cyber-card">
             <h3 className="text-lg font-semibold mb-3">Raw Metadata</h3>
             <div className="p-4 bg-muted/50 rounded-lg font-mono text-xs">
               <div className="space-y-1">
-                <p><span className="text-muted-foreground">Event ID:</span> {alert.rawMetadata?.eventid || alert.id}</p>
-                <p><span className="text-muted-foreground">Object ID:</span> {alert.rawMetadata?.objectid || "N/A"}</p>
-                <p><span className="text-muted-foreground">Host:</span> {alert.host}</p>
-                <p><span className="text-muted-foreground">Category:</span> {alert.category}</p>
-                <p><span className="text-muted-foreground">Severity:</span> {alert.severity.toUpperCase()} ({alert.rawMetadata?.severity || "N/A"})</p>
-                <p><span className="text-muted-foreground">Timestamp:</span> {alert.timestamp}</p>
-                <p><span className="text-muted-foreground">Duration:</span> {alert.duration}</p>
-                <p><span className="text-muted-foreground">Status:</span> {alert.acknowledged ? "Acknowledged" : "Active"}</p>
+                <p>
+                  <span className="text-muted-foreground">Event ID:</span>{" "}
+                  {alert.rawMetadata?.eventid ?? alert.id ?? "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Object ID:</span>{" "}
+                  {alert.rawMetadata?.objectid ?? "N/A"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Host:</span>{" "}
+                  {alert.host}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Category:</span>{" "}
+                  {alert.category}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Severity:</span>{" "}
+                  {alert.severity.toUpperCase()} (
+                  {alert.rawMetadata?.severity ?? "N/A"})
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Timestamp:</span>{" "}
+                  {alert.timestamp}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Duration:</span>{" "}
+                  {alert.duration}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Status:</span>{" "}
+                  {alert.acknowledged ? "Acknowledged" : "Active"}
+                </p>
                 {alert.dedupeKey && (
-                  <p><span className="text-muted-foreground">Dedupe Key:</span> {alert.dedupeKey}</p>
+                  <p>
+                    <span className="text-muted-foreground">Dedupe Key:</span>{" "}
+                    {alert.dedupeKey}
+                  </p>
                 )}
               </div>
             </div>

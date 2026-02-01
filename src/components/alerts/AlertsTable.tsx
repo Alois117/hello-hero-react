@@ -33,13 +33,16 @@ export interface Alert {
   firstSeen?: string;
   lastSeen?: string;
   dedupeKey?: string;
+  // Fixed: now fully optional + internal fields optional
   rawMetadata?: {
-    name: string;
-    clock: string;
-    eventid: string;
-    r_clock: string;
-    objectid: string;
-    severity: string;
+    name?: string;
+    clock?: string | number;
+    eventid?: string;
+    r_clock?: string;
+    objectid?: string;
+    severity?: string;
+    // Allow any extra fields from webhook (future-proof)
+    [key: string]: unknown;
   };
 }
 

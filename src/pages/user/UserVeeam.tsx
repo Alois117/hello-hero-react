@@ -269,7 +269,7 @@ const UserVeeam = () => {
             )}
           </TabsContent>
 
-          {/* Infrastructure Tab – UNCHANGED */}
+          {/* Infrastructure Tab */}
           <TabsContent value="infrastructure" className="space-y-6">
             {/* Status Bar */}
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -344,22 +344,26 @@ const UserVeeam = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <AnimatePresence mode="popLayout">
                     {infraHook.paginatedVMs.map((vm, index) => {
-                      const data = vm.raw_json?.json;
+                      const metrics = vm.raw_json?.vm_metrics;
+                      const vmName = vm.raw_json?.vm_name;
 
-                      if (!data) {
+                      if (!metrics || !vmName) {
                         return (
-                          <Card key={vm.VM_id} className="p-6 text-center text-muted-foreground">
+                          <Card
+                            key={vm.vmid || `invalid-${index}`}
+                            className="p-6 text-center text-muted-foreground"
+                          >
                             Invalid VM data
                           </Card>
                         );
                       }
 
-                      const isPoweredOn = data.powerState === "PoweredOn";
-                      const isProtected = !!data.isProtected;
+                      const isPoweredOn = metrics.powerState === "PoweredOn";
+                      const isProtected = !!metrics.isProtected;
 
                       return (
                         <motion.div
-                          key={vm.VM_id}
+                          key={vm.vmid}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
@@ -372,14 +376,13 @@ const UserVeeam = () => {
                               setVMDrawerOpen(true);
                             }}
                           >
-                            {/* ... rest of VM card content unchanged ... */}
                             <div className="flex items-start gap-3">
                               <div className={`p-2 rounded-lg ${isPoweredOn ? "bg-success/10" : "bg-muted/30"}`}>
                                 <Monitor className={`w-5 h-5 ${isPoweredOn ? "text-success" : "text-muted-foreground"}`} />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-semibold truncate">
-                                  {data.name || "Unnamed VM"}
+                                  {vmName || "Unnamed VM"}
                                 </h4>
 
                                 <div className="flex items-center gap-2 mt-1">
@@ -391,17 +394,17 @@ const UserVeeam = () => {
                                         : "text-muted-foreground border-muted/30"
                                     }`}
                                   >
-                                    {data.powerState || "Unknown"}
+                                    {metrics.powerState || "Unknown"}
                                   </Badge>
                                   <Badge
                                     variant="outline"
                                     className={`text-xs ${
-                                      data.connectionState === "Connected"
+                                      metrics.connectionState === "Connected"
                                         ? "text-primary border-primary/30"
                                         : "text-destructive border-destructive/30"
                                     }`}
                                   >
-                                    {data.connectionState || "Unknown"}
+                                    {metrics.connectionState || "Unknown"}
                                   </Badge>
                                 </div>
 
@@ -411,14 +414,14 @@ const UserVeeam = () => {
                                       <Cpu className="w-3.5 h-3.5" />
                                       CPU
                                     </span>
-                                    <span className="font-medium">{data.cpuCount ?? "?"} vCPU</span>
+                                    <span className="font-medium">{metrics.cpuCount ?? "?"} vCPU</span>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground flex items-center gap-1">
                                       <Server className="w-3.5 h-3.5" />
                                       Memory
                                     </span>
-                                    <span className="font-medium">{data.memorySizeHuman || "? GB"}</span>
+                                    <span className="font-medium">{metrics.memorySizeHuman || "? GB"}</span>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground flex items-center gap-1">
@@ -426,7 +429,7 @@ const UserVeeam = () => {
                                       Disk
                                     </span>
                                     <span className="font-medium text-xs">
-                                      {data.totalCommittedHuman || "?"} / {data.totalAllocatedHuman || "?"}
+                                      {metrics.totalCommittedHuman || "?"} / {metrics.totalAllocatedHuman || "?"}
                                     </span>
                                   </div>
                                 </div>
@@ -438,7 +441,7 @@ const UserVeeam = () => {
                                       Last Backup
                                     </span>
                                     <span className="font-medium text-xs">
-                                      {formatLastBackup(data.lastProtectedDate)}
+                                      {formatLastBackup(metrics.lastProtectedDate)}
                                     </span>
                                   </div>
                                   <div className="flex items-center justify-between">
