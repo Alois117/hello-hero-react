@@ -15,6 +15,18 @@ export { default as UserInfoMenu } from './components/UserInfoMenu';
 
 // Hooks
 export { useAuthenticatedFetch } from './hooks/useAuthenticatedFetch';
+export { useIdleTimeout } from './hooks/useIdleTimeout';
+export { useTokenRefresh } from './hooks/useTokenRefresh';
+
+// Audit Logging
+export {
+  logAuthAuditEvent,
+  getRecentAuditLogs,
+  clearAuditLogBuffer,
+  exportAuditLogs,
+  type AuthAuditEventType,
+  type AuthAuditEntry,
+} from './audit/authAuditLogger';
 
 // Utils - Token
 export {
