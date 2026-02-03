@@ -11,9 +11,11 @@ import {
   extractRoles,
   extractOrganizations,
   extractUsername,
-  isTokenExpired,
   DecodedToken,
 } from '../utils/tokenUtils';
+import { useTokenRefresh } from '../hooks/useTokenRefresh';
+import { useIdleTimeout } from '../hooks/useIdleTimeout';
+import { logAuthAuditEvent } from '../audit/authAuditLogger';
 
 export type AppRole = 'user' | 'org_admin' | 'super_admin';
 
@@ -33,88 +35,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Configuration constants
+const IDLE_TIMEOUT_MINUTES = 10;
+const TOKEN_REFRESH_INTERVAL_SECONDS = 30;
+const TOKEN_MIN_VALIDITY_SECONDS = 60;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { keycloak, initialized } = useKeycloak();
 
   // ────────────────────────────────────────────────────────────────
-  // FORCE TOKEN REFRESH AFTER LOGIN
+  // DERIVED VALUES (computed from token)
   // ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (initialized && keycloak.authenticated) {
-      keycloak.updateToken(0).catch(() => {
-        // ignore – existing token still valid for now
-      });
-    }
-  }, [initialized, keycloak]);
-
-  // ────────────────────────────────────────────────────────────────
-  // CONTINUOUS TOKEN REFRESH + EXPIRY DETECTION
-  // ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!initialized || !keycloak.authenticated) return;
-
-    const interval = setInterval(() => {
-      keycloak
-        .updateToken(60) // refresh if <60s left
-        .then((refreshed) => {
-          if (refreshed) {
-            console.debug('[Auth] Access token refreshed');
-          }
-        })
-        .catch((err) => {
-          console.error('[Auth] Token refresh failed → likely revoked/expired', err);
-          keycloak.logout({
-            redirectUri: `${window.location.origin}/login`,
-          });
-        });
-
-      // Extra safety: check decoded expiry even if refresh succeeds
-      if (keycloak.tokenParsed) {
-        const decoded = decodeToken(keycloak.token!);
-        if (decoded && isTokenExpired(decoded)) {
-          console.debug('[Auth] Token expired despite refresh attempt → logout');
-          keycloak.logout({
-            redirectUri: `${window.location.origin}/login`,
-          });
-        }
-      }
-    }, 30_000); // check every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [initialized, keycloak]);
-
-  // INACTIVITY TIMEOUT (10 minutes)
-  useEffect(() => {
-    if (!initialized || !keycloak.authenticated) return;
-
-    const IDLE_TIMEOUT_MIN = 10;
-    let idleTimer: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        console.debug('[Auth] Inactivity timeout (10 min) → logging out');
-        keycloak.logout({
-          redirectUri: `${window.location.origin}/login`,
-        });
-      }, IDLE_TIMEOUT_MIN * 60 * 1000);
-    };
-
-    const events = ['mousemove', 'keydown', 'scroll', 'touchstart'];
-    events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
-
-    resetTimer(); // start timer
-
-    return () => {
-      clearTimeout(idleTimer);
-      events.forEach((ev) => window.removeEventListener(ev, resetTimer));
-    };
-  }, [initialized, keycloak.authenticated, keycloak]);
-
-
-  // DERIVED VALUES (unchanged)
   const decodedToken = useMemo<DecodedToken | null>(() => {
     if (!keycloak.token) return null;
     return decodeToken(keycloak.token);
@@ -143,8 +76,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return decodedToken?.email || '';
   }, [decodedToken]);
 
-  // IMPROVED LOGOUT – clear storage after Keycloak logout
+  // ────────────────────────────────────────────────────────────────
+  // FORCE LOGOUT HANDLER (used by token refresh and idle timeout)
+  // ────────────────────────────────────────────────────────────────
+  const handleForceLogout = useCallback((reason: string) => {
+    logAuthAuditEvent('FORCE_LOGOUT', {
+      userId: decodedToken?.sub,
+      username,
+      email,
+      reason,
+    });
+
+    // Clear any local state before redirect
+    sessionStorage.clear();
+    
+    keycloak.logout({
+      redirectUri: `${window.location.origin}/login`,
+    });
+  }, [keycloak, decodedToken?.sub, username, email]);
+
+  // ────────────────────────────────────────────────────────────────
+  // SILENT TOKEN REFRESH (handles token lifecycle)
+  // ────────────────────────────────────────────────────────────────
+  useTokenRefresh({
+    keycloak,
+    initialized,
+    onForceLogout: handleForceLogout,
+    refreshIntervalSeconds: TOKEN_REFRESH_INTERVAL_SECONDS,
+    minValiditySeconds: TOKEN_MIN_VALIDITY_SECONDS,
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // IDLE TIMEOUT (10 minute inactivity logout)
+  // ────────────────────────────────────────────────────────────────
+  const handleIdleLogout = useCallback(() => {
+    handleForceLogout('User idle timeout');
+  }, [handleForceLogout]);
+
+  useIdleTimeout({
+    timeoutMinutes: IDLE_TIMEOUT_MINUTES,
+    onIdle: handleIdleLogout,
+    enabled: initialized && !!keycloak.authenticated,
+    userId: decodedToken?.sub,
+    username,
+    email,
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // LOG LOGIN SUCCESS (audit trail)
+  // ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (initialized && keycloak.authenticated && decodedToken) {
+      logAuthAuditEvent('LOGIN', {
+        userId: decodedToken.sub,
+        username: extractUsername(decodedToken),
+        email: decodedToken.email,
+        reason: 'User authenticated successfully',
+        metadata: {
+          tokenExp: decodedToken.exp,
+          roles: extractRoles(decodedToken, import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend'),
+        },
+      });
+    }
+  }, [initialized, keycloak.authenticated, decodedToken?.sub]); // Only run on auth state change
+
+  // ────────────────────────────────────────────────────────────────
+  // USER LOGOUT (explicit user action)
+  // ────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
+    logAuthAuditEvent('LOGOUT', {
+      userId: decodedToken?.sub,
+      username,
+      email,
+      reason: 'User initiated logout',
+    });
+
     keycloak
       .logout({
         redirectUri: `${window.location.origin}/login`,
@@ -153,7 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Force-clear any lingering tokens/state
         localStorage.clear();
         sessionStorage.clear();
-        console.debug('[Auth] Logout completed – storage cleared');
       })
       .catch((err) => {
         console.error('[Auth] Logout failed', err);
@@ -161,14 +166,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.clear();
         sessionStorage.clear();
       });
-  }, [keycloak]);
+  }, [keycloak, decodedToken?.sub, username, email]);
 
+  // ────────────────────────────────────────────────────────────────
+  // USER LOGIN
+  // ────────────────────────────────────────────────────────────────
   const login = useCallback(() => {
     keycloak.login({
       redirectUri: `${window.location.origin}/auth/callback`,
     });
   }, [keycloak]);
 
+  // ────────────────────────────────────────────────────────────────
+  // CONTEXT VALUE
+  // ────────────────────────────────────────────────────────────────
   const contextValue = useMemo<AuthContextType>(
     () => ({
       isAuthenticated: !!keycloak.authenticated,

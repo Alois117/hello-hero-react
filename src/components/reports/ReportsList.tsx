@@ -123,9 +123,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
 
       // Configure html2pdf options for high fidelity
       const options = {
-        margin: [10, 10, 10, 10],
+        margin: [10, 10, 10, 10] as [number, number, number, number],
         filename: `report-${report.report_type}-${format(new Date(report.created_at), "yyyy-MM-dd")}.pdf`,
-        image: { type: "jpeg", quality: 1 },
+        image: { type: "jpeg" as const, quality: 1 },
         html2canvas: {
           scale: 2,
           useCORS: true,
@@ -133,11 +133,11 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
           logging: false,
         },
         jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
+          unit: "mm" as const,
+          format: "a4" as const,
+          orientation: "portrait" as const,
         },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] as const },
       };
 
       // Generate and download PDF
