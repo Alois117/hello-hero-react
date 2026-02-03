@@ -126,67 +126,94 @@ const ReportDrawer = ({ report, isOpen, onClose }: ReportDrawerProps) => {
 </html>`;
   }, [report?.report_template]);
 
-  const handleDownloadPdf = async () => {
+  const handlePrintPdf = async () => {
     if (!report) return;
     setIsGeneratingPdf(true);
 
     try {
       const printWindow = window.open("", "_blank");
       if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8">
-              <title>Report - ${format(new Date(report.created_at), "PPP")}</title>
-              <style>
-                @page {
-                  size: A4 portrait;
-                  margin: 1.2cm;
-                }
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                  margin: 0;
-                  padding: 0;
-                  color: #1a1a1a;
-                  line-height: 1.6;
-                  font-size: 12px;
-                }
-                table { 
-                  width: 100%; 
-                  border-collapse: collapse;
-                  page-break-inside: auto; 
-                  margin: 0.5rem 0;
-                }
-                th, td {
-                  border: 1px solid #d1d5db;
-                  padding: 0.5rem;
-                  text-align: left;
-                }
-                th {
-                  background: #f3f4f6;
-                  font-weight: 600;
-                }
-                tr { 
-                  page-break-inside: avoid; 
-                  page-break-after: auto; 
-                }
-                img { 
-                  max-width: 100%; 
-                  height: auto; 
-                  page-break-inside: avoid; 
-                }
-                h1, h2, h3 { page-break-after: avoid; }
-                h1 { font-size: 1.5rem; }
-                h2 { font-size: 1.25rem; }
-                h3 { font-size: 1.1rem; }
-              </style>
-            </head>
-            <body>
-              ${report.report_template}
-            </body>
-          </html>
-        `);
+        // Use color-preserving styles matching the UI dark theme
+        printWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Report - ${format(new Date(report.created_at), "PPP")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 1.2cm;
+    }
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #e2e8f0;
+      background: #0f172a !important;
+    }
+    body { padding: 1.5rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.5rem 0;
+      background: #1e293b !important;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      page-break-inside: auto;
+    }
+    th, td {
+      border: 1px solid #334155;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #334155 !important;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    img { max-width: 100%; height: auto; page-break-inside: avoid; border-radius: 0.5rem; }
+    h1, h2, h3, h4, h5, h6 {
+      color: #f1f5f9;
+      page-break-after: avoid;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.25rem; }
+    h3 { font-size: 1.1rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+    li { margin-bottom: 0.25rem; }
+    a { color: #60a5fa; text-decoration: none; }
+    pre, code {
+      background: #1e293b !important;
+      border-radius: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.875rem;
+    }
+    pre { padding: 1rem; overflow-x: auto; }
+    blockquote {
+      border-left: 4px solid #3b82f6;
+      margin: 1rem 0;
+      padding-left: 1rem;
+      color: #94a3b8;
+    }
+    hr { border: none; border-top: 1px solid #334155; margin: 1.5rem 0; }
+    .success, .ok, .green { color: #22c55e !important; }
+    .warning, .yellow { color: #eab308 !important; }
+    .error, .critical, .red { color: #ef4444 !important; }
+  </style>
+</head>
+<body>${report.report_template}</body>
+</html>`);
         printWindow.document.close();
         setTimeout(() => {
           printWindow.print();
@@ -257,16 +284,16 @@ const ReportDrawer = ({ report, isOpen, onClose }: ReportDrawerProps) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* PDF Download - Always Visible */}
+            {/* Print PDF - Opens print dialog */}
             <Button
               variant="outline"
               size="sm"
-              onClick={handleDownloadPdf}
+              onClick={handlePrintPdf}
               disabled={isGeneratingPdf}
               className="border-primary/30 hover:border-primary hover:bg-primary/10"
             >
               <Download className="w-4 h-4 mr-2" />
-              {isGeneratingPdf ? "Generating..." : "Download PDF"}
+              {isGeneratingPdf ? "Generating..." : "Print PDF"}
             </Button>
 
             {/* Fullscreen Toggle */}

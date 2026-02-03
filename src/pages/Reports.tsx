@@ -48,69 +48,7 @@ const Reports = () => {
     setTimeout(() => setSelectedReport(null), 300);
   }, []);
 
-  const handleDownloadPdf = useCallback((report: ReportItem) => {
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <title>Report - ${format(new Date(report.created_at), "PPP")}</title>
-            <style>
-              @page {
-                size: A4 portrait;
-                margin: 1.2cm;
-              }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                padding: 0;
-                color: #1a1a1a;
-                line-height: 1.6;
-                font-size: 12px;
-              }
-              table { 
-                width: 100%; 
-                border-collapse: collapse;
-                page-break-inside: auto; 
-                margin: 0.5rem 0;
-              }
-              th, td {
-                border: 1px solid #d1d5db;
-                padding: 0.5rem;
-                text-align: left;
-              }
-              th {
-                background: #f3f4f6;
-                font-weight: 600;
-              }
-              tr { 
-                page-break-inside: avoid; 
-                page-break-after: auto; 
-              }
-              img { 
-                max-width: 100%; 
-                height: auto; 
-                page-break-inside: avoid; 
-              }
-              h1, h2, h3 { page-break-after: avoid; }
-              h1 { font-size: 1.5rem; }
-              h2 { font-size: 1.25rem; }
-              h3 { font-size: 1.1rem; }
-            </style>
-          </head>
-          <body>
-            ${report.report_template}
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      setTimeout(() => {
-        printWindow.print();
-      }, 800);
-    }
-  }, []);
+  // PDF download is now handled directly in ReportsList for instant download
 
   return (
     <AppLayout>
@@ -176,7 +114,6 @@ const Reports = () => {
               reports={paginatedReports}
               loading={loading}
               onReportClick={handleReportClick}
-              onDownloadPdf={handleDownloadPdf}
             />
 
             {/* Pagination */}

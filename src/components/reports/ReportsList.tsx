@@ -1,19 +1,22 @@
 import { format } from "date-fns";
-import { FileText, Calendar, BarChart3, Download, Eye } from "lucide-react";
+import { FileText, Calendar, BarChart3, Download, Eye, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportItem } from "@/hooks/useReports";
+import { useState } from "react";
+import html2pdf from "html2pdf.js";
 
 interface ReportsListProps {
   reports: ReportItem[];
   loading: boolean;
   onReportClick: (report: ReportItem) => void;
-  onDownloadPdf: (report: ReportItem) => void;
 }
 
-const ReportsList = ({ reports, loading, onReportClick, onDownloadPdf }: ReportsListProps) => {
+const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   const getTypeColor = (type: string) => {
     switch (type) {
       case "daily":
@@ -41,9 +44,109 @@ const ReportsList = ({ reports, loading, onReportClick, onDownloadPdf }: Reports
     }
   };
 
-  const handleDownloadClick = (e: React.MouseEvent, report: ReportItem) => {
+  const handleDownloadClick = async (e: React.MouseEvent, report: ReportItem) => {
     e.stopPropagation();
-    onDownloadPdf(report);
+    
+    const reportId = `${report.report_type}_${report.created_at}`;
+    setDownloadingId(reportId);
+
+    try {
+      // Create container for PDF generation with full styling
+      const container = document.createElement("div");
+      container.innerHTML = `
+        <style>
+          * { box-sizing: border-box; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #e2e8f0;
+            background: #0f172a !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.5rem 0;
+            background: #1e293b !important;
+            border-radius: 0.5rem;
+            overflow: hidden;
+          }
+          th, td {
+            border: 1px solid #334155;
+            padding: 0.5rem;
+            text-align: left;
+          }
+          th {
+            background: #334155 !important;
+            font-weight: 600;
+            color: #f1f5f9;
+          }
+          img { max-width: 100%; height: auto; border-radius: 0.5rem; }
+          h1, h2, h3, h4, h5, h6 {
+            color: #f1f5f9;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+          }
+          h1 { font-size: 1.5rem; }
+          h2 { font-size: 1.25rem; }
+          h3 { font-size: 1.1rem; }
+          p { margin-bottom: 1rem; }
+          ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+          li { margin-bottom: 0.25rem; }
+          a { color: #60a5fa; text-decoration: none; }
+          pre, code {
+            background: #1e293b !important;
+            border-radius: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+          }
+          pre { padding: 1rem; overflow-x: auto; }
+          blockquote {
+            border-left: 4px solid #3b82f6;
+            margin: 1rem 0;
+            padding-left: 1rem;
+            color: #94a3b8;
+          }
+          hr { border: none; border-top: 1px solid #334155; margin: 1.5rem 0; }
+          .success, .ok, .green { color: #22c55e !important; }
+          .warning, .yellow { color: #eab308 !important; }
+          .error, .critical, .red { color: #ef4444 !important; }
+        </style>
+        <div style="padding: 1.5rem; background: #0f172a;">${report.report_template}</div>
+      `;
+
+      // Configure html2pdf options for high fidelity
+      const options = {
+        margin: [10, 10, 10, 10],
+        filename: `report-${report.report_type}-${format(new Date(report.created_at), "yyyy-MM-dd")}.pdf`,
+        image: { type: "jpeg", quality: 1 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#0f172a",
+          logging: false,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+        },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      // Generate and download PDF
+      await html2pdf().set(options).from(container).save();
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const handleViewClick = (e: React.MouseEvent, report: ReportItem) => {
@@ -138,9 +241,14 @@ const ReportsList = ({ reports, loading, onReportClick, onDownloadPdf }: Reports
                 variant="outline"
                 size="sm"
                 onClick={(e) => handleDownloadClick(e, report)}
+                disabled={downloadingId === `${report.report_type}_${report.created_at}`}
                 className="border-muted-foreground/30 hover:border-primary hover:bg-primary/10"
               >
-                <Download className="w-4 h-4 mr-2" />
+                {downloadingId === `${report.report_type}_${report.created_at}` ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
                 PDF
               </Button>
             </div>

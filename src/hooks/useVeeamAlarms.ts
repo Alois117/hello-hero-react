@@ -110,20 +110,22 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
   }, [debouncedSearch, filterStatus, filterSeverity, filterEntityType, timeRange, customDateFrom, customDateTo, pageSize]);
 
   const { authenticatedFetch } = useAuthenticatedFetch();
+
   const fetchAlarms = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    
+
     try {
       const response = await authenticatedFetch(VEEAM_ALARMS_ENDPOINT, {
         method: "POST",
         headers: { Accept: "application/json" },
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
       }
 
       const data = await response.json();
+
       const alarmsArray = data
         .map((item: any) => {
           if (typeof item !== "object" || item === null) return null;
@@ -163,17 +165,32 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
             first_seen: inner.first_seen,
             last_seen: inner.last_seen,
             seen_count: inner.repeat_count,
-            times_sent: 0, // Default, as not present in new structure
+            times_sent: 0,
             reminder_interval: undefined,
             first_ai_response: inner.comment || undefined,
           } as VeeamAlarm;
         })
-        .filter(Boolean); // Remove any null entries
+        .filter((alarm): alarm is VeeamAlarm => Boolean(alarm));
 
-      setAlarms(alarmsArray);
+      // ────────────────────────────────────────────────
+      // DEDUPLICATION: Keep only one alarm per dedupe_key
+      // ────────────────────────────────────────────────
+      const uniqueAlarmsMap = new Map<string, VeeamAlarm>();
+      alarmsArray.forEach((alarm) => {
+        if (alarm.dedupe_key && !uniqueAlarmsMap.has(alarm.dedupe_key)) {
+          uniqueAlarmsMap.set(alarm.dedupe_key, alarm);
+        }
+      });
+
+      const uniqueAlarms = Array.from(uniqueAlarmsMap.values());
+
+      setAlarms(uniqueAlarms);
       setIsConnected(true);
       setLastUpdated(new Date());
       setError(null);
+
+      // Optional: log for debugging
+      // console.log(`Fetched: ${alarmsArray.length} alarms → Unique: ${uniqueAlarms.length}`);
     } catch (err) {
       console.error("Failed to fetch Veeam alarms:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch alarms");
@@ -181,68 +198,62 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [authenticatedFetch]);
 
-  // Initial fetch and silent refresh
+  // Initial fetch + polling
   useEffect(() => {
     fetchAlarms();
     const interval = setInterval(() => fetchAlarms(true), REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchAlarms]);
 
-  // Extract unique entity types for filter dropdown
+  // Unique entity types for dropdown
   const entityTypes = useMemo(() => {
     const types = new Set(alarms.map((a) => a.entity_type).filter(Boolean));
     return Array.from(types).sort();
   }, [alarms]);
 
-  // Filter alarms
+  // Filtered & sorted alarms
   const filteredAlarms = useMemo(() => {
-    return alarms.filter((alarm) => {
-      // Search filter
-      if (debouncedSearch) {
-        const search = debouncedSearch.toLowerCase();
-        const matchesSearch =
-          alarm.name?.toLowerCase().includes(search) ||
-          alarm.entity_name?.toLowerCase().includes(search) ||
-          alarm.entity_type?.toLowerCase().includes(search) ||
-          alarm.description?.toLowerCase().includes(search) ||
-          alarm.alarm_id?.toLowerCase().includes(search);
-        if (!matchesSearch) return false;
-      }
-
-      // Status filter
-      if (filterStatus && alarm.status !== filterStatus) return false;
-
-      // Severity filter
-      if (filterSeverity && alarm.severity !== filterSeverity) return false;
-
-      // Entity type filter
-      if (filterEntityType && alarm.entity_type !== filterEntityType) return false;
-
-      // Time range filter
-      const alarmTime = alarm.last_seen || alarm.triggered_at;
-      if (alarmTime && timeRange !== "custom") {
-        const alarmDate = new Date(alarmTime).getTime();
-        let cutoff = 0;
-        switch (timeRange) {
-          case "1h":
-            cutoff = Date.now() - 60 * 60 * 1000;
-            break;
-          case "24h":
-            cutoff = Date.now() - 24 * 60 * 60 * 1000;
-            break;
-          case "7d":
-            cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-            break;
+    return alarms
+      .filter((alarm) => {
+        // Search
+        if (debouncedSearch) {
+          const search = debouncedSearch.toLowerCase();
+          return (
+            alarm.name?.toLowerCase().includes(search) ||
+            alarm.entity_name?.toLowerCase().includes(search) ||
+            alarm.entity_type?.toLowerCase().includes(search) ||
+            alarm.description?.toLowerCase().includes(search) ||
+            alarm.alarm_id?.toLowerCase().includes(search)
+          );
         }
-        if (cutoff > 0 && alarmDate < cutoff) return false;
-      }
 
-      // Custom date range
-      if (timeRange === "custom") {
+        if (filterStatus && alarm.status !== filterStatus) return false;
+        if (filterSeverity && alarm.severity !== filterSeverity) return false;
+        if (filterEntityType && alarm.entity_type !== filterEntityType) return false;
+
+        // Time range filter
         const alarmTime = alarm.last_seen || alarm.triggered_at;
-        if (alarmTime) {
+        if (alarmTime && timeRange !== "custom") {
+          const alarmDate = new Date(alarmTime).getTime();
+          let cutoff = 0;
+          switch (timeRange) {
+            case "1h":
+              cutoff = Date.now() - 60 * 60 * 1000;
+              break;
+            case "24h":
+              cutoff = Date.now() - 24 * 60 * 60 * 1000;
+              break;
+            case "7d":
+              cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+              break;
+          }
+          if (cutoff > 0 && alarmDate < cutoff) return false;
+        }
+
+        // Custom range
+        if (timeRange === "custom" && alarmTime) {
           const alarmDate = new Date(alarmTime).getTime();
           if (customDateFrom && alarmDate < customDateFrom.getTime()) return false;
           if (customDateTo) {
@@ -251,23 +262,20 @@ export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAla
             if (alarmDate > toEnd.getTime()) return false;
           }
         }
-      }
 
-      return true;
-    }).sort((a, b) => {
-      // Sort by last_seen descending
-      const aTime = a.last_seen || a.triggered_at || "";
-      const bTime = b.last_seen || b.triggered_at || "";
-      return new Date(bTime).getTime() - new Date(aTime).getTime();
-    });
+        return true;
+      })
+      .sort((a, b) => {
+        const aTime = a.last_seen || a.triggered_at || "";
+        const bTime = b.last_seen || b.triggered_at || "";
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      });
   }, [alarms, debouncedSearch, filterStatus, filterSeverity, filterEntityType, timeRange, customDateFrom, customDateTo]);
 
-  // Paginated alarms (load more pattern)
   const paginatedAlarms = useMemo(() => {
     return filteredAlarms.slice(0, displayCount);
   }, [filteredAlarms, displayCount]);
 
-  // Counts
   const counts = useMemo(() => {
     return {
       total: alarms.length,
@@ -330,7 +338,7 @@ export const getRelativeTime = (dateString: string | null): string => {
   if (!dateString) return "N/A";
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return "Invalid date";
-  
+
   const now = Date.now();
   const diffMs = now - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
