@@ -1,41 +1,138 @@
+/**
+ * Super Admin Organizations Page
+ * Displays all tenant organizations with real data from webhooks
+ * Uses same data patterns as user dashboard for consistency
+ */
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
+import { 
+  useOrganizations, 
+  useOrganizationMetrics 
+} from "@/hooks/super-admin/organizations";
+import {
+  OrganizationsSummaryCards,
+  OrganizationsFilters,
+  OrganizationsConnectionStatus,
+  OrganizationsList,
+  OrganizationsPagination,
+  OrganizationDetailView,
+} from "@/components/super-admin/organizations";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Building2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Organizations = () => {
-  const orgs = [
-    { id: 1, name: "Acme Corp", users: 24, hosts: 142, plan: "Enterprise" },
-    { id: 2, name: "TechStart Inc", users: 12, hosts: 45, plan: "Professional" },
-    { id: 3, name: "Global Systems", users: 156, hosts: 890, plan: "Enterprise" },
-  ];
+  const {
+    organizations,
+    loading,
+    error,
+    counts,
+    isConnected,
+    lastUpdated,
+    filters,
+    setSearchQuery,
+    setStatusFilter,
+    setHasActiveAlertsFilter,
+    clearFilters,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    totalPages,
+    paginatedOrganizations,
+    selectedOrg,
+    setSelectedOrg,
+  } = useOrganizations(10);
 
+  // Fetch detailed metrics when an org is selected
+  const {
+    metrics: orgMetrics,
+    loading: metricsLoading,
+    lastUpdated: metricsLastUpdated,
+    refresh: refreshMetrics,
+  } = useOrganizationMetrics({
+    clientId: selectedOrg?.clientId ?? null,
+    enabled: selectedOrg !== null,
+  });
+
+  // If an organization is selected, show detail view
+  if (selectedOrg) {
+    return (
+      <SuperAdminLayout>
+        <div className="space-y-6 animate-fade-in">
+          {/* Back Button */}
+          <Button 
+            variant="ghost" 
+            onClick={() => setSelectedOrg(null)}
+            className="gap-2 mb-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Organizations
+          </Button>
+
+          <OrganizationDetailView
+            organization={selectedOrg}
+            metrics={orgMetrics}
+            loading={metricsLoading}
+            lastUpdated={metricsLastUpdated}
+            onClose={() => setSelectedOrg(null)}
+            onRefresh={refreshMetrics}
+          />
+        </div>
+      </SuperAdminLayout>
+    );
+  }
+
+  // Main organizations list view
   return (
     <SuperAdminLayout>
       <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-destructive to-accent bg-clip-text text-transparent">
-            Organizations
-          </h1>
-          <p className="text-muted-foreground mt-1">Manage all tenant organizations</p>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-destructive to-accent bg-clip-text text-transparent">
+              Organizations
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Manage all tenant organizations
+            </p>
+          </div>
+          <OrganizationsConnectionStatus
+            isConnected={isConnected}
+            lastUpdated={lastUpdated}
+            loading={loading}
+          />
         </div>
 
-        <div className="space-y-4">
-          {orgs.map((org) => (
-            <Card key={org.id} className="p-6 bg-card/50 backdrop-blur border-border/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Building2 className="w-8 h-8 text-destructive" />
-                  <div>
-                    <h3 className="font-semibold text-lg">{org.name}</h3>
-                    <p className="text-sm text-muted-foreground">{org.users} users • {org.hosts} hosts</p>
-                  </div>
-                </div>
-                <Badge variant="secondary">{org.plan}</Badge>
-              </div>
-            </Card>
-          ))}
-        </div>
+        {/* Summary Cards */}
+        <OrganizationsSummaryCards counts={counts} />
+
+        {/* Filters */}
+        <Card className="p-4 border-border/50">
+          <OrganizationsFilters
+            filters={filters}
+            onSearchChange={setSearchQuery}
+            onStatusChange={setStatusFilter}
+            onHasAlertsChange={setHasActiveAlertsFilter}
+            onClearFilters={clearFilters}
+          />
+        </Card>
+
+        {/* Organizations List */}
+        <OrganizationsList
+          organizations={paginatedOrganizations}
+          loading={loading}
+          error={error}
+          onOrgClick={setSelectedOrg}
+          selectedOrgId={selectedOrg?.id}
+        />
+
+        {/* Pagination */}
+        <OrganizationsPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={organizations.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </SuperAdminLayout>
   );
