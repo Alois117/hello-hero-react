@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { logAuthAuditEvent } from '../audit/authAuditLogger';
 
 interface UseIdleTimeoutOptions {
   timeoutMinutes: number;
@@ -38,19 +37,12 @@ export const useIdleTimeout = ({
 
     // Only trigger if we've actually been idle for the expected duration
     if (idleDuration >= expectedTimeout - 1000) { // 1 second tolerance
-      logAuthAuditEvent('IDLE_TIMEOUT', {
-        userId,
-        username,
-        email,
-        reason: `User idle for ${timeoutMinutes} minutes`,
-        metadata: { idleDurationMs: idleDuration },
-      });
       onIdle();
     } else {
       // Activity happened, reschedule
       startIdleTimer();
     }
-  }, [timeoutMinutes, onIdle, userId, username, email]);
+  }, [timeoutMinutes, onIdle]);
 
   const startIdleTimer = useCallback(() => {
     clearIdleTimer();

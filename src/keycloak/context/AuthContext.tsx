@@ -15,7 +15,6 @@ import {
 } from '../utils/tokenUtils';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
-import { logAuthAuditEvent } from '../audit/authAuditLogger';
 
 export type AppRole = 'user' | 'org_admin' | 'super_admin';
 
@@ -80,20 +79,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // FORCE LOGOUT HANDLER (used by token refresh and idle timeout)
   // ────────────────────────────────────────────────────────────────
   const handleForceLogout = useCallback((reason: string) => {
-    logAuthAuditEvent('FORCE_LOGOUT', {
-      userId: decodedToken?.sub,
-      username,
-      email,
-      reason,
-    });
-
     // Clear any local state before redirect
     sessionStorage.clear();
     
     keycloak.logout({
       redirectUri: `${window.location.origin}/login`,
     });
-  }, [keycloak, decodedToken?.sub, username, email]);
+  }, [keycloak]);
 
   // ────────────────────────────────────────────────────────────────
   // SILENT TOKEN REFRESH (handles token lifecycle)
@@ -122,35 +114,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     email,
   });
 
-  // ────────────────────────────────────────────────────────────────
-  // LOG LOGIN SUCCESS (audit trail)
-  // ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (initialized && keycloak.authenticated && decodedToken) {
-      logAuthAuditEvent('LOGIN', {
-        userId: decodedToken.sub,
-        username: extractUsername(decodedToken),
-        email: decodedToken.email,
-        reason: 'User authenticated successfully',
-        metadata: {
-          tokenExp: decodedToken.exp,
-          roles: extractRoles(decodedToken, import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend'),
-        },
-      });
-    }
-  }, [initialized, keycloak.authenticated, decodedToken?.sub]); // Only run on auth state change
 
   // ────────────────────────────────────────────────────────────────
   // USER LOGOUT (explicit user action)
   // ────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
-    logAuthAuditEvent('LOGOUT', {
-      userId: decodedToken?.sub,
-      username,
-      email,
-      reason: 'User initiated logout',
-    });
-
     keycloak
       .logout({
         redirectUri: `${window.location.origin}/login`,
@@ -166,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.clear();
         sessionStorage.clear();
       });
-  }, [keycloak, decodedToken?.sub, username, email]);
+  }, [keycloak]);
 
   // ────────────────────────────────────────────────────────────────
   // USER LOGIN

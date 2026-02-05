@@ -12,7 +12,8 @@ const keycloak = new Keycloak(keycloakConfig);
 export const initOptions = {
   onLoad: 'check-sso' as const,
   pkceMethod: 'S256' as const,
-  checkLoginIframe: false,
+  checkLoginIframe: true,
+  checkLoginIframeInterval: 5,
   silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
 redirectUri: `${window.location.origin}/auth/callback`,
 

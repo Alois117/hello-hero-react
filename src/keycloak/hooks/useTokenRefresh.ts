@@ -1,7 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type Keycloak from 'keycloak-js';
-import { logAuthAuditEvent } from '../audit/authAuditLogger';
-
 interface UseTokenRefreshOptions {
   keycloak: Keycloak;
   initialized: boolean;
@@ -10,21 +8,12 @@ interface UseTokenRefreshOptions {
   minValiditySeconds?: number;
 }
 
-/**
- * Hook to handle silent token refresh with proper error handling.
- * 
- * Key behaviors:
- * - Refreshes token when it's close to expiry (configurable threshold)
- * - Does NOT force logout on successful refresh
- * - Only forces logout when refresh definitively fails (session invalid)
- * - Logs all refresh events for audit
- */
 export const useTokenRefresh = ({
   keycloak,
   initialized,
   onForceLogout,
   refreshIntervalSeconds = 30,
-  minValiditySeconds = 60,
+  minValiditySeconds = 45, // ← lowered from 120 → more proactive refreshes
 }: UseTokenRefreshOptions): void => {
   const refreshInProgressRef = useRef(false);
   const consecutiveFailuresRef = useRef(0);
@@ -44,85 +33,60 @@ export const useTokenRefresh = ({
     refreshInProgressRef.current = true;
 
     try {
-      // Check if token needs refresh (within minValiditySeconds of expiry)
       const refreshed = await keycloak.updateToken(minValiditySeconds);
 
       if (refreshed) {
-        consecutiveFailuresRef.current = 0; // Reset failure counter
-        logAuthAuditEvent('TOKEN_REFRESH', {
-          ...getUserInfo(),
-          reason: 'Token refreshed successfully',
-          metadata: {
-            tokenExp: keycloak.tokenParsed?.exp,
-            refreshedAt: Date.now(),
-          },
-        });
+        consecutiveFailuresRef.current = 0;
+        console.log('[TokenRefresh] Success → token refreshed');
       }
-      // If not refreshed, token is still valid - no action needed
-
-    } catch (error) {
+    } catch (error: any) {
       consecutiveFailuresRef.current++;
-      
-      const userInfo = getUserInfo();
-      logAuthAuditEvent('TOKEN_REFRESH_FAILED', {
-        ...userInfo,
-        reason: `Token refresh failed (attempt ${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_FAILURES})`,
-        metadata: { error: String(error) },
-      });
 
-      // Only force logout after multiple consecutive failures
-      // This handles transient network issues gracefully
+      const errorMessage = error?.message || String(error);
+      const errorDetails = {
+        name: error?.name,
+        message: errorMessage,
+        stack: error?.stack,
+        fullError: JSON.stringify(error, (k, v) => (typeof v === 'object' && v !== null ? '[Object]' : v), 2),
+        timestamp: new Date().toISOString(),
+      };
+
+      console.error('[TokenRefresh CRITICAL] Refresh failed at ' + errorDetails.timestamp);
+      console.error('[TokenRefresh] Error details:', errorDetails);
+      console.error('[TokenRefresh] Raw error:', error);
+
+      // Small improvement: if it's a transient network error, we could retry once
       if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-        logAuthAuditEvent('FORCE_LOGOUT', {
-          ...userInfo,
-          reason: 'Token refresh failed after maximum retries - session likely revoked or expired',
-        });
+        console.warn('[TokenRefresh] MAX failures reached → forcing logout');
         onForceLogout('Session expired or revoked. Please log in again.');
       }
     } finally {
       refreshInProgressRef.current = false;
     }
-  }, [keycloak, minValiditySeconds, onForceLogout, getUserInfo]);
+  }, [keycloak, minValiditySeconds, onForceLogout]);
 
   useEffect(() => {
-    if (!initialized || !keycloak.authenticated) {
-      return;
-    }
+    if (!initialized || !keycloak.authenticated) return;
 
-    // Reset failure counter on fresh authentication
     consecutiveFailuresRef.current = 0;
-
-    // Perform initial refresh check
     performTokenRefresh();
 
-    // Set up periodic refresh
     const intervalId = setInterval(performTokenRefresh, refreshIntervalSeconds * 1000);
 
-    return () => {
-      clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, [initialized, keycloak.authenticated, performTokenRefresh, refreshIntervalSeconds]);
 
-  // Handle Keycloak events
   useEffect(() => {
     if (!initialized) return;
 
     const handleTokenExpired = () => {
-      logAuthAuditEvent('TOKEN_REFRESH', {
-        ...getUserInfo(),
-        reason: 'Token expired event - attempting refresh',
-      });
       performTokenRefresh();
     };
 
     const handleAuthLogout = () => {
-      logAuthAuditEvent('LOGOUT', {
-        ...getUserInfo(),
-        reason: 'Keycloak session ended',
-      });
+      console.log('[TokenRefresh] Keycloak session ended');
     };
 
-    // Keycloak JS adapter events
     keycloak.onTokenExpired = handleTokenExpired;
     keycloak.onAuthLogout = handleAuthLogout;
 
@@ -130,7 +94,7 @@ export const useTokenRefresh = ({
       keycloak.onTokenExpired = undefined;
       keycloak.onAuthLogout = undefined;
     };
-  }, [initialized, keycloak, getUserInfo, performTokenRefresh]);
+  }, [initialized, keycloak, performTokenRefresh]);
 };
 
 export default useTokenRefresh;
