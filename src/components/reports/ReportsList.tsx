@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportItem } from "@/hooks/useReports";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import html2pdf from "html2pdf.js";
+import { isItemRead, markItemRead, makeItemKey } from "@/utils/readState";
+import { useAuth } from "@/keycloak/context/AuthContext";
 
 interface ReportsListProps {
   reports: ReportItem[];
@@ -15,7 +17,22 @@ interface ReportsListProps {
 }
 
 const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
+  const { decodedToken } = useAuth();
+  const userId = decodedToken?.sub || '';
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+
+  const getReportKey = (r: ReportItem) => makeItemKey('report', r.report_type, r.created_at);
+
+  // Sync read state
+  useEffect(() => {
+    if (!userId || reports.length === 0) return;
+    const set = new Set<string>();
+    reports.forEach(r => {
+      if (isItemRead(userId, getReportKey(r))) set.add(getReportKey(r));
+    });
+    setReadIds(set);
+  }, [userId, reports]);
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -151,6 +168,11 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
 
   const handleViewClick = (e: React.MouseEvent, report: ReportItem) => {
     e.stopPropagation();
+    const key = getReportKey(report);
+    if (userId && !readIds.has(key)) {
+      markItemRead(userId, key);
+      setReadIds(prev => new Set(prev).add(key));
+    }
     onReportClick(report);
   };
 
@@ -202,7 +224,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
       {reports.map((report, index) => (
         <Card
           key={`${report.report_type}_${report.created_at}`}
-          className="p-5 border-border/50 hover:border-primary/30 transition-colors duration-200 group"
+          className={`p-5 border-border/50 hover:border-primary/30 transition-colors duration-200 group ${
+            readIds.has(getReportKey(report)) ? 'opacity-75' : 'border-l-2 border-l-primary/40 bg-primary/[0.02]'
+          }`}
           style={{ animationDelay: `${index * 0.05}s` }}
         >
           <div className="flex items-center justify-between">
@@ -211,7 +235,7 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
                 <BarChart3 className="w-6 h-6 text-primary" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
+                <h3 className={`text-base group-hover:text-primary transition-colors ${readIds.has(getReportKey(report)) ? 'font-medium text-muted-foreground' : 'font-semibold'}`}>
                   {getReportTitle(report)}
                 </h3>
                 <div className="flex items-center gap-3">
