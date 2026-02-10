@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_AI_INSIGHTS_URL } from "@/config/env";
 
-const AI_INSIGHTS_ENDPOINT = "http://localhost:5678/webhook/agent-insights"; // using Vite proxy
+const AI_INSIGHTS_ENDPOINT = WEBHOOK_AI_INSIGHTS_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export interface AiInsightRaw {

@@ -47,6 +47,7 @@ import ZabbixHosts from "./pages/org-admin/ZabbixHosts";
 import Zabbix from "./pages/org-admin/Zabbix";
 import MaintenanceWindows from "./pages/org-admin/MaintenanceWindows";
 import AISettings from "./pages/org-admin/AISettings";
+import OrgAdminSettings from "./pages/org-admin/OrgAdminSettings";
 
 // Super Admin Pages
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
@@ -57,6 +58,7 @@ import MultiTenantBilling from "./pages/super-admin/MultiTenantBilling";
 import AIMLPerformance from "./pages/super-admin/AIMLPerformance";
 import FeatureFlagsPage from "./pages/super-admin/FeatureFlagsPage";
 import ResellerPortal from "./pages/super-admin/ResellerPortal";
+import SuperAdminSettings from "./pages/super-admin/SuperAdminSettings";
 
 const queryClient = new QueryClient();
 
@@ -103,6 +105,7 @@ const App = () => (
                 <Route path="/admin/zabbix" element={<ProtectedRoute requiredRole="org_admin"><ZabbixHosts /></ProtectedRoute>} />
                 <Route path="/admin/maintenance" element={<ProtectedRoute requiredRole="org_admin"><MaintenanceWindows /></ProtectedRoute>} />
                 <Route path="/admin/ai" element={<ProtectedRoute requiredRole="org_admin"><AISettings /></ProtectedRoute>} />
+                <Route path="/admin/settings" element={<ProtectedRoute requiredRole="org_admin"><OrgAdminSettings /></ProtectedRoute>} />
 
                 <Route path="/super-admin" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
                 <Route path="/super-admin/organizations" element={<ProtectedRoute requiredRole="super_admin"><Organizations /></ProtectedRoute>} />
@@ -112,6 +115,7 @@ const App = () => (
                 <Route path="/super-admin/aiml" element={<ProtectedRoute requiredRole="super_admin"><AIMLPerformance /></ProtectedRoute>} />
                 <Route path="/super-admin/features" element={<ProtectedRoute requiredRole="super_admin"><FeatureFlagsPage /></ProtectedRoute>} />
                 <Route path="/super-admin/reseller" element={<ProtectedRoute requiredRole="super_admin"><ResellerPortal /></ProtectedRoute>} />
+                <Route path="/super-admin/settings" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminSettings /></ProtectedRoute>} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

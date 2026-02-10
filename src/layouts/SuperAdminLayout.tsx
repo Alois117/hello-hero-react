@@ -9,6 +9,7 @@ import {
   CreditCard,
   Cpu,
   ToggleLeft,
+  Settings,
   Menu,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const menuItems = [
   { icon: CreditCard, label: "Multi-Tenant Billing", path: "/super-admin/billing" },
   { icon: Cpu, label: "AI/ML Performance", path: "/super-admin/aiml" },
   { icon: ToggleLeft, label: "Feature Flags", path: "/super-admin/features" },
+  { icon: Settings, label: "Settings", path: "/super-admin/settings" },
 ];
 
 const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {

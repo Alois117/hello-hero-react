@@ -4,11 +4,20 @@
  * Matches the visual style of Zabbix Alerts summary cards
  */
 import { motion } from "framer-motion";
-import { Building2, Users, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import {
+  Building2,
+  Users,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import { OrganizationCounts } from "@/hooks/super-admin/organizations";
+import { AlertItem } from "@/hooks/super-admin//organizations/useOrganizationDetails"; // adjust import path if different
 
 interface OrganizationsSummaryCardsProps {
   counts: OrganizationCounts;
+  // ✅ Pass real alerts list (all orgs) here
+  alerts?: AlertItem[];
 }
 
 const cardVariants = {
@@ -16,7 +25,19 @@ const cardVariants = {
   animate: { opacity: 1, y: 0 },
 };
 
-const OrganizationsSummaryCards = ({ counts }: OrganizationsSummaryCardsProps) => {
+const isActiveAlert = (a: Partial<AlertItem>) => {
+  const status = String(a.status ?? "").toLowerCase();
+  // treat acknowledged separately if you want
+  return status === "active" || status === "problem" || status === "open";
+};
+
+const OrganizationsSummaryCards = ({
+  counts,
+  alerts = [],
+}: OrganizationsSummaryCardsProps) => {
+  // ✅ Real total active alerts (computed)
+  const activeAlertsCount = alerts.filter(isActiveAlert).length;
+
   const cards = [
     {
       label: "Total Organizations",
@@ -52,7 +73,8 @@ const OrganizationsSummaryCards = ({ counts }: OrganizationsSummaryCardsProps) =
     },
     {
       label: "Active Alerts",
-      count: counts.totalAlerts,
+      // ✅ Use real computed count (fallback to counts.totalAlerts if alerts not provided)
+      count: alerts.length ? activeAlertsCount : counts.totalAlerts,
       icon: AlertTriangle,
       borderColor: "border-warning/30",
       bgGradient: "from-warning/20 to-warning/5",

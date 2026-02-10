@@ -9,6 +9,7 @@ import {
   Clock,
   Server as ServerIcon,
   Wrench,
+  Settings,
   Menu,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const menuItems = [
   { icon: Clock, label: "On-Call", path: "/admin/oncall" },
   { icon: ServerIcon, label: "Zabbix", path: "/admin/zabbix-monitoring" },
   { icon: Wrench, label: "Maintenance", path: "/admin/maintenance" },
+  { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
 const OrgAdminLayout = ({ children }: OrgAdminLayoutProps) => {

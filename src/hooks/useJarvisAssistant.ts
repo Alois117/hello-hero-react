@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_JARVIS_ASSISTANT_URL } from "@/config/env";
 
 interface JarvisResponse {
   confidence: string;
@@ -12,7 +13,7 @@ interface UseJarvisAssistantReturn {
   error: string | null;
 }
 
-const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/Jarvis-AI-Assistant";
+const WEBHOOK_URL = WEBHOOK_JARVIS_ASSISTANT_URL;
 
 const useJarvisAssistant = (): UseJarvisAssistantReturn => {
   const [isLoading, setIsLoading] = useState(false);

@@ -49,9 +49,9 @@ import VmDrawer from "@/pages/user/backup-replication/components/VmDrawer";
 import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetailDrawer";
 import ChangeActivityDrawer from "@/pages/user/backup-replication/components/ChangeActivityDrawer";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_BACKUP_REPLICATION_URL } from "@/config/env";
 
-// const ENDPOINT = "http://10.100.12.141:5678/webhook/backupandreplication";
-const ENDPOINT = "http://localhost:5678/webhook/backupandreplication";
+const ENDPOINT = WEBHOOK_BACKUP_REPLICATION_URL;
 
 type Status = "idle" | "loading" | "success" | "error";
 

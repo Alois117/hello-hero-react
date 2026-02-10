@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_ZABBIX_HOSTS_URL } from "@/config/env";
 
 // ────────────────────────────────────────────────
 // Endpoint Configuration
 // ────────────────────────────────────────────────
-const WEBHOOK_URL = "http://localhost:5678/webhook/zabbix-hosts";
+const WEBHOOK_URL = WEBHOOK_ZABBIX_HOSTS_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds - mirrors Zabbix Alerts
 
 // ────────────────────────────────────────────────

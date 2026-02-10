@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_BACKUP_REPLICATION_URL } from "@/config/env";
 
-const WEBHOOK_URL = "http://10.100.12.141:5678/webhook/backupandreplication";
+const WEBHOOK_URL = WEBHOOK_BACKUP_REPLICATION_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export interface VeeamJobMetrics {

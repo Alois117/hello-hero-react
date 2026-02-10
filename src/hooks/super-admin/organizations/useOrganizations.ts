@@ -13,9 +13,10 @@ import {
   OrganizationSortField,
   SortDirection 
 } from "./types";
+import { WEBHOOK_ORGANIZATIONS_URL } from "@/config/env";
 
 // Using the same webhook pattern as other hooks
-const ORGANIZATIONS_ENDPOINT = "http://localhost:5678/webhook/organizations";
+const ORGANIZATIONS_ENDPOINT = WEBHOOK_ORGANIZATIONS_URL;
 const REFRESH_INTERVAL = 30000; // 30 seconds - less aggressive than alerts
 
 export interface UseOrganizationsReturn {

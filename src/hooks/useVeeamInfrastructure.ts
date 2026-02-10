@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_VEEAM_VMS_URL } from "@/config/env";
 
 export interface VeeamVMRawJson {
   vm_metrics: {
@@ -109,7 +110,7 @@ interface UseVeeamInfrastructureReturn {
   };
 }
 
-const VEEAM_VMS_ENDPOINT = "http://localhost:5678/webhook/veeamone_vms";
+const VEEAM_VMS_ENDPOINT = WEBHOOK_VEEAM_VMS_URL;
 const REFRESH_INTERVAL = 10000;
 
 export const useVeeamInfrastructure = (

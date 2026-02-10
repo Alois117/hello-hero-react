@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_REPORTS_URL } from "@/config/env";
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/reports";
+const WEBHOOK_URL = WEBHOOK_REPORTS_URL;
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export interface ReportItem {

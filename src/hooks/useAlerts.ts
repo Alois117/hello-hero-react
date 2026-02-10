@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { WEBHOOK_ALERTS_URL } from "@/config/env";
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/ai/insights";
+const WEBHOOK_URL = WEBHOOK_ALERTS_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
 // ────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 import Keycloak from 'keycloak-js';
+import { KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID } from '@/config/env';
 
 const keycloakConfig = {
-  // url: import.meta.env.VITE_KEYCLOAK_URL || 'https://10.100.12.141:8443',
-  url: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080',
-  realm: import.meta.env.VITE_KEYCLOAK_REALM || 'Jarvis',
-  clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend',
+  url: KEYCLOAK_URL,
+  realm: KEYCLOAK_REALM,
+  clientId: KEYCLOAK_CLIENT_ID,
 };
 
 const keycloak = new Keycloak(keycloakConfig);

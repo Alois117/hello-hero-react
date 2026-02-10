@@ -71,7 +71,9 @@ interface UseVeeamAlarmsReturn {
   entityTypes: string[];
 }
 
-const VEEAM_ALARMS_ENDPOINT = "http://localhost:5678/webhook/alarms";
+import { WEBHOOK_VEEAM_ALARMS_URL } from "@/config/env";
+
+const VEEAM_ALARMS_ENDPOINT = WEBHOOK_VEEAM_ALARMS_URL;
 const REFRESH_INTERVAL = 5000;
 
 export const useVeeamAlarms = (options: UseVeeamAlarmsOptions = {}): UseVeeamAlarmsReturn => {

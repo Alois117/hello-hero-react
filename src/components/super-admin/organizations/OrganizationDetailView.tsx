@@ -1,8 +1,8 @@
 /**
  * Organization Detail View
- * Shows detailed metrics for a selected organization
- * Uses existing data patterns from user dashboard
+ * Shows detailed metrics for a selected organization with clickable drilldown cards
  */
+import { useState, useCallback } from "react";
 import { 
   X, 
   Users, 
@@ -14,14 +14,38 @@ import {
   TrendingUp,
   CheckCircle,
   XCircle,
-  Loader2,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  Collapsible, 
+  CollapsibleContent, 
+  CollapsibleTrigger 
+} from "@/components/ui/collapsible";
 import { Organization, OrganizationDetailMetrics } from "@/hooks/super-admin/organizations";
+import { 
+  useOrganizationDetails, 
+  DrilldownCategory,
+  AlertItem,
+  HostItem,
+  ReportItem,
+  InsightItem,
+  VeeamJobItem,
+  UserItem,
+} from "@/hooks/super-admin/organizations/useOrganizationDetails";
+import {
+  AlertsDrilldown,
+  HostsDrilldown,
+  ReportsDrilldown,
+  InsightsDrilldown,
+  VeeamDrilldown,
+  UsersDrilldown,
+} from "./drilldown";
+import { DrilldownDetailDrawer } from "./drilldown/detail";
 import { format } from "date-fns";
 
 interface OrganizationDetailViewProps {
@@ -33,19 +57,47 @@ interface OrganizationDetailViewProps {
   onRefresh: () => void;
 }
 
-interface MetricCardProps {
+interface ClickableMetricCardProps {
   title: string;
   icon: React.ElementType;
   loading: boolean;
   children: React.ReactNode;
   iconColor?: string;
+  isSelected: boolean;
+  onClick: () => void;
+  category: DrilldownCategory;
 }
 
-const MetricCard = ({ title, icon: Icon, loading, children, iconColor = "text-primary" }: MetricCardProps) => (
-  <Card className="p-4 border-border/50">
-    <div className="flex items-center gap-2 mb-3">
-      <Icon className={`w-5 h-5 ${iconColor}`} />
-      <h4 className="font-medium text-sm">{title}</h4>
+const ClickableMetricCard = ({ 
+  title, 
+  icon: Icon, 
+  loading, 
+  children, 
+  iconColor = "text-primary",
+  isSelected,
+  onClick,
+}: ClickableMetricCardProps) => (
+  <Card 
+    className={`
+      p-4 border-border/50 cursor-pointer transition-all duration-200
+      hover:border-primary/50 hover:shadow-md hover:shadow-primary/5
+      ${isSelected 
+        ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+        : "hover:bg-muted/30"
+      }
+    `}
+    onClick={onClick}
+  >
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`w-5 h-5 ${isSelected ? "text-primary" : iconColor}`} />
+        <h4 className="font-medium text-sm">{title}</h4>
+      </div>
+      <ChevronDown 
+        className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${
+          isSelected ? "rotate-180 text-primary" : ""
+        }`} 
+      />
     </div>
     {loading ? (
       <div className="space-y-2">
@@ -66,6 +118,130 @@ const OrganizationDetailView = ({
   onClose,
   onRefresh,
 }: OrganizationDetailViewProps) => {
+  // Use the details hook for drilldown data
+  const {
+    selectedCategory,
+    setSelectedCategory,
+    alerts,
+    hosts,
+    reports,
+    insights,
+    veeam,
+    users,
+    refreshCategory,
+  } = useOrganizationDetails({
+    clientId: organization.clientId,
+    enabled: true,
+  });
+
+  // Selected item for drawer detail view
+  type DrilldownItem = AlertItem | HostItem | ReportItem | InsightItem | VeeamJobItem | UserItem;
+  const [selectedItem, setSelectedItem] = useState<DrilldownItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleCardClick = (category: DrilldownCategory) => {
+    if (selectedCategory === category) {
+      setSelectedCategory(null); // Toggle off
+    } else {
+      setSelectedCategory(category);
+    }
+    // Close drawer when switching categories
+    setSelectedItem(null);
+    setDrawerOpen(false);
+  };
+
+  const handleRefreshCategory = () => {
+    if (selectedCategory) {
+      refreshCategory(selectedCategory);
+    }
+  };
+
+  const handleItemClick = useCallback((item: DrilldownItem) => {
+    setSelectedItem(item);
+    setDrawerOpen(true);
+  }, []);
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+    setSelectedItem(null);
+  }, []);
+
+  // Render the drilldown content based on selected category
+  const renderDrilldown = () => {
+    if (!selectedCategory) return null;
+
+    switch (selectedCategory) {
+      case "alerts":
+        return (
+          <AlertsDrilldown
+            orgName={organization.name}
+            alerts={alerts.items}
+            loading={alerts.loading}
+            error={alerts.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      case "hosts":
+        return (
+          <HostsDrilldown
+            orgName={organization.name}
+            hosts={hosts.items}
+            loading={hosts.loading}
+            error={hosts.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      case "reports":
+        return (
+          <ReportsDrilldown
+            orgName={organization.name}
+            reports={reports.items}
+            loading={reports.loading}
+            error={reports.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      case "insights":
+        return (
+          <InsightsDrilldown
+            orgName={organization.name}
+            insights={insights.items}
+            loading={insights.loading}
+            error={insights.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      case "veeam":
+        return (
+          <VeeamDrilldown
+            orgName={organization.name}
+            jobs={veeam.items}
+            loading={veeam.loading}
+            error={veeam.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      case "users":
+        return (
+          <UsersDrilldown
+            orgName={organization.name}
+            users={users.items}
+            loading={users.loading}
+            error={users.error}
+            onRefresh={handleRefreshCategory}
+            onItemClick={handleItemClick}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -112,10 +288,23 @@ const OrganizationDetailView = ({
         </div>
       </div>
 
-      {/* Metrics Grid */}
+      {/* Clickable hint */}
+      <p className="text-sm text-muted-foreground">
+        Click on any card below to view detailed data for that category
+      </p>
+
+      {/* Metrics Grid - Clickable Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Alerts */}
-        <MetricCard title="Alerts" icon={AlertTriangle} loading={metrics.alerts.loading} iconColor="text-warning">
+        <ClickableMetricCard 
+          title="Alerts" 
+          icon={AlertTriangle} 
+          loading={metrics.alerts.loading} 
+          iconColor="text-warning"
+          isSelected={selectedCategory === "alerts"}
+          onClick={() => handleCardClick("alerts")}
+          category="alerts"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{metrics.alerts.total}</p>
             <div className="flex gap-4 text-sm text-muted-foreground">
@@ -123,10 +312,18 @@ const OrganizationDetailView = ({
               <span className="text-destructive">{metrics.alerts.critical} critical</span>
             </div>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
 
         {/* Hosts */}
-        <MetricCard title="Zabbix Hosts" icon={Server} loading={metrics.hosts.loading} iconColor="text-primary">
+        <ClickableMetricCard 
+          title="Zabbix Hosts" 
+          icon={Server} 
+          loading={metrics.hosts.loading} 
+          iconColor="text-primary"
+          isSelected={selectedCategory === "hosts"}
+          onClick={() => handleCardClick("hosts")}
+          category="hosts"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{metrics.hosts.total}</p>
             <div className="flex gap-4 text-sm text-muted-foreground">
@@ -140,10 +337,18 @@ const OrganizationDetailView = ({
               </span>
             </div>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
 
         {/* Reports */}
-        <MetricCard title="Reports" icon={FileText} loading={metrics.reports.loading} iconColor="text-secondary">
+        <ClickableMetricCard 
+          title="Reports" 
+          icon={FileText} 
+          loading={metrics.reports.loading} 
+          iconColor="text-secondary"
+          isSelected={selectedCategory === "reports"}
+          onClick={() => handleCardClick("reports")}
+          category="reports"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{metrics.reports.total}</p>
             <div className="flex gap-3 text-xs text-muted-foreground">
@@ -152,10 +357,18 @@ const OrganizationDetailView = ({
               <span>{metrics.reports.monthly} monthly</span>
             </div>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
 
         {/* AI Insights */}
-        <MetricCard title="AI Insights" icon={Brain} loading={metrics.insights.loading} iconColor="text-accent">
+        <ClickableMetricCard 
+          title="AI Insights" 
+          icon={Brain} 
+          loading={metrics.insights.loading} 
+          iconColor="text-accent"
+          isSelected={selectedCategory === "insights"}
+          onClick={() => handleCardClick("insights")}
+          category="insights"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{metrics.insights.total}</p>
             <div className="flex gap-4 text-sm text-muted-foreground">
@@ -163,10 +376,18 @@ const OrganizationDetailView = ({
               <span>{metrics.insights.anomalies} anomalies</span>
             </div>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
 
         {/* Veeam Backup */}
-        <MetricCard title="Veeam Jobs" icon={HardDrive} loading={metrics.veeam.loading} iconColor="text-success">
+        <ClickableMetricCard 
+          title="Veeam Jobs" 
+          icon={HardDrive} 
+          loading={metrics.veeam.loading} 
+          iconColor="text-success"
+          isSelected={selectedCategory === "veeam"}
+          onClick={() => handleCardClick("veeam")}
+          category="veeam"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{metrics.veeam.jobs}</p>
             <div className="flex gap-4 text-sm text-muted-foreground">
@@ -174,16 +395,35 @@ const OrganizationDetailView = ({
               <span className="text-destructive">{metrics.veeam.failed} failed</span>
             </div>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
 
         {/* Users */}
-        <MetricCard title="Users" icon={Users} loading={metrics.users.loading} iconColor="text-primary">
+        <ClickableMetricCard 
+          title="Users" 
+          icon={Users} 
+          loading={metrics.users.loading} 
+          iconColor="text-primary"
+          isSelected={selectedCategory === "users"}
+          onClick={() => handleCardClick("users")}
+          category="users"
+        >
           <div className="space-y-2">
             <p className="text-2xl font-bold">{organization.userCount}</p>
             <p className="text-sm text-muted-foreground">Total users in organization</p>
           </div>
-        </MetricCard>
+        </ClickableMetricCard>
       </div>
+
+      {/* Drilldown Section */}
+      <Collapsible open={selectedCategory !== null}>
+        <CollapsibleContent className="animate-accordion-down">
+          {selectedCategory && (
+            <Card className="p-6 border-border/50 bg-card/50 backdrop-blur-sm">
+              {renderDrilldown()}
+            </Card>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Organization Meta */}
       <Card className="p-4 border-border/50">
@@ -207,6 +447,15 @@ const OrganizationDetailView = ({
           </div>
         </div>
       </Card>
+
+      {/* Item Detail Drawer */}
+      <DrilldownDetailDrawer
+        open={drawerOpen}
+        onClose={handleDrawerClose}
+        category={selectedCategory}
+        item={selectedItem}
+        orgName={organization.name}
+      />
     </div>
   );
 };
