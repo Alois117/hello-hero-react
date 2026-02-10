@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Table,
@@ -15,6 +15,8 @@ import SeverityBadge, { AlertSeverity } from "./SeverityBadge";
 import AlertActionMenu from "./AlertActionMenu";
 import AlertDetailDrawer from "./AlertDetailDrawer";
 import TableSkeleton from "@/components/loading/TableSkeleton";
+import { isItemRead, markItemRead } from "@/utils/readState";
+import { useAuth } from "@/keycloak/context/AuthContext";
 
 export interface Alert {
   id: number;
@@ -61,10 +63,13 @@ const AlertsTable = ({
   showAcknowledged = true,
   searchQuery = "",
 }: AlertsTableProps) => {
+  const { decodedToken } = useAuth();
+  const userId = decodedToken?.sub || '';
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const itemsPerPage = 5;
 
   // Filter alerts based on severity, acknowledged status, and search query
@@ -107,10 +112,25 @@ const AlertsTable = ({
     }
   }, [totalPages, currentPage]);
 
+  // Sync read state when alerts or user changes
+  useEffect(() => {
+    if (!userId || alerts.length === 0) return;
+    const set = new Set<string>();
+    alerts.forEach(a => {
+      if (isItemRead(userId, String(a.id))) set.add(String(a.id));
+    });
+    setReadIds(set);
+  }, [userId, alerts]);
+
   const handleRowClick = useCallback((alert: Alert) => {
+    const aid = String(alert.id);
+    if (userId && !readIds.has(aid)) {
+      markItemRead(userId, aid);
+      setReadIds(prev => new Set(prev).add(aid));
+    }
     setSelectedAlert(alert);
     setDrawerOpen(true);
-  }, []);
+  }, [userId, readIds]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent, alert: Alert, index: number) => {
     switch (e.key) {
@@ -188,7 +208,9 @@ const AlertsTable = ({
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.2, delay: index * 0.03 }}
                     whileHover={{ scale: 1.005 }}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    className={`cursor-pointer hover:bg-muted/50 transition-colors ${
+                      readIds.has(String(alert.id)) ? 'opacity-70' : 'bg-primary/[0.03] border-l-2 border-l-primary/40'
+                    }`}
                     onClick={() => handleRowClick(alert)}
                     onKeyDown={(e) => handleKeyDown(e, alert, index)}
                     tabIndex={0}
@@ -204,7 +226,7 @@ const AlertsTable = ({
                     <TableCell role="cell" className="hidden sm:table-cell whitespace-nowrap">
                       <Badge variant="secondary" className="text-xs">{alert.category}</Badge>
                     </TableCell>
-                    <TableCell className="font-medium min-w-[200px] sm:min-w-[250px]" role="cell">
+                    <TableCell className={`min-w-[200px] sm:min-w-[250px] ${readIds.has(String(alert.id)) ? 'font-normal text-muted-foreground' : 'font-semibold'}`} role="cell">
                       <span className="line-clamp-2">{alert.problem}</span>
                     </TableCell>
                     <TableCell role="cell" className="hidden md:table-cell whitespace-nowrap">

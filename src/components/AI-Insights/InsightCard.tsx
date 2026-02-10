@@ -15,6 +15,8 @@ interface InsightCardProps {
   getSeverityBadge: (severity: AiInsight["severity"]) => string;
   getTypeIcon: (type: AiInsight["type"]) => JSX.Element;
   getTypeColor: (type: AiInsight["type"]) => string;
+  isRead?: boolean;
+  onMarkRead?: () => void;
 }
 
 const InsightCard: React.FC<InsightCardProps> = React.memo(
@@ -26,12 +28,22 @@ const InsightCard: React.FC<InsightCardProps> = React.memo(
     getSeverityBadge,
     getTypeIcon,
     getTypeColor,
+    isRead = false,
+    onMarkRead,
   }) => {
-    
+    const handleExpandChange = (open: boolean) => {
+      if (open && !isRead && onMarkRead) {
+        onMarkRead();
+      }
+      onExpandedChange(open);
+    };
 
     return (
-      <Card className="overflow-hidden transition-all duration-300 hover:border-primary/30">
-        <Collapsible open={expanded} onOpenChange={onExpandedChange}>
+      <Card className={cn(
+        "overflow-hidden transition-all duration-300 hover:border-primary/30",
+        isRead ? "opacity-75" : "border-l-2 border-l-primary/40 bg-primary/[0.02]"
+      )}>
+        <Collapsible open={expanded} onOpenChange={handleExpandChange}>
           {/* Header */}
           <div className="p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-start gap-4">
@@ -64,7 +76,7 @@ const InsightCard: React.FC<InsightCardProps> = React.memo(
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-lg leading-tight">{insight.title}</h3>
+                  <h3 className={cn("text-lg leading-tight", isRead ? "font-medium text-muted-foreground" : "font-semibold")}>{insight.title}</h3>
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                     {insight.summary}
                   </p>
@@ -184,6 +196,7 @@ const InsightCard: React.FC<InsightCardProps> = React.memo(
   (prev, next) =>
     prev.insight === next.insight &&
     prev.expanded === next.expanded &&
+    prev.isRead === next.isRead &&
     prev.getImpactColor === next.getImpactColor &&
     prev.getSeverityBadge === next.getSeverityBadge &&
     prev.getTypeIcon === next.getTypeIcon &&
