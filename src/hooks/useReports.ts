@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_REPORTS_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 const WEBHOOK_URL = WEBHOOK_REPORTS_URL;
 const REFRESH_INTERVAL = 30000; // 30 seconds
@@ -120,12 +121,12 @@ export const useReports = (): UseReportsReturn => {
           body: JSON.stringify({}),
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        const result = await safeParseResponse<ReportItem[]>(response, WEBHOOK_URL);
+        if (!result.ok) {
+          throw new Error(result.userMessage);
         }
 
-        const data = await response.json();
-        const webhookReports: ReportItem[] = Array.isArray(data) ? data : [];
+        const webhookReports: ReportItem[] = Array.isArray(result.data) ? result.data : [];
 
         const validReports = webhookReports.filter(
           (r) =>
@@ -159,7 +160,9 @@ export const useReports = (): UseReportsReturn => {
         setLastUpdated(new Date());
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch reports");
+        const safe = err instanceof Error ? err.message : "We couldn't load reports. Please try again.";
+        console.error("[useReports] Fetch error:", err);
+        setError(safe);
         setIsConnected(false);
       } finally {
         if (!silent) setLoading(false);
@@ -174,19 +177,19 @@ export const useReports = (): UseReportsReturn => {
     try {
       setLoading(true);
 
-      const response = await authenticatedFetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: dateRange.from.toISOString(),
-          to: dateRange.to.toISOString(),
-        }),
-      });
+        const response = await authenticatedFetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: dateRange.from.toISOString(),
+            to: dateRange.to.toISOString(),
+          }),
+        });
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const result = await safeParseResponse<ReportItem[]>(response, WEBHOOK_URL);
+        if (!result.ok) throw new Error(result.userMessage);
 
-      const data = await response.json();
-      const webhookReports: ReportItem[] = Array.isArray(data) ? data : [];
+        const webhookReports: ReportItem[] = Array.isArray(result.data) ? result.data : [];
 
       const validReports = webhookReports.filter(
         (r) =>
@@ -208,7 +211,9 @@ export const useReports = (): UseReportsReturn => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch custom reports");
+      const safe = err instanceof Error ? err.message : "We couldn't load custom reports. Please try again.";
+      console.error("[useReports] Custom fetch error:", err);
+      setError(safe);
       setIsConnected(false);
     } finally {
       setLoading(false);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_BACKUP_REPLICATION_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 const WEBHOOK_URL = WEBHOOK_BACKUP_REPLICATION_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
@@ -207,14 +208,21 @@ export const useVeeamBackupAndReplication = (): UseVeeamBackupReturn => {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await safeParseResponse<VeeamBackupJob[]>(response, WEBHOOK_URL);
+      if (!result.ok) {
+        throw new Error(result.userMessage);
       }
 
-      const data = await response.json();
+      if (!result.data) {
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+        if (!silent) setLoading(false);
+        return;
+      }
       
       // Handle both array and single object responses
-      const webhookJobs: VeeamBackupJob[] = Array.isArray(data) ? data : [data];
+      const webhookJobs: VeeamBackupJob[] = Array.isArray(result.data) ? result.data : [result.data];
       
       // Transform to our format
       const transformedJobs = webhookJobs.map(transformVeeamJob);
@@ -226,10 +234,9 @@ export const useVeeamBackupAndReplication = (): UseVeeamBackupReturn => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      console.error("Failed to fetch Veeam jobs:", err);
-      if (!silent) {
-        setError(err instanceof Error ? err.message : "Failed to fetch jobs");
-      }
+      const safe = err instanceof Error ? err.message : "We couldn't load backup jobs. Please try again.";
+      console.error("[useVeeamBackup] Fetch error:", err);
+      if (!silent) setError(safe);
       setIsConnected(false);
       // Keep existing data on error
     } finally {

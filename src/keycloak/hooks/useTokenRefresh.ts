@@ -13,7 +13,7 @@ export const useTokenRefresh = ({
   initialized,
   onForceLogout,
   refreshIntervalSeconds = 30,
-  minValiditySeconds = 45, // ← lowered from 120 → more proactive refreshes
+  minValiditySeconds = 45, // ← more proactive refreshes
 }: UseTokenRefreshOptions): void => {
   const refreshInProgressRef = useRef(false);
   const consecutiveFailuresRef = useRef(0);

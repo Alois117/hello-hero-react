@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_AI_INSIGHTS_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 const AI_INSIGHTS_ENDPOINT = WEBHOOK_AI_INSIGHTS_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
@@ -221,12 +222,21 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
         body: JSON.stringify({}),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await safeParseResponse<AiInsightRaw[]>(response, AI_INSIGHTS_ENDPOINT);
+      if (!result.ok) {
+        throw new Error(result.userMessage);
       }
 
-      const data = await response.json();
-      const rawInsights: AiInsightRaw[] = Array.isArray(data) ? data : [data];
+      if (!result.data) {
+        setInsights([]);
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+        if (!silent) setLoading(false);
+        return;
+      }
+
+      const rawInsights: AiInsightRaw[] = Array.isArray(result.data) ? result.data : [result.data];
 
       const transformedInsights = rawInsights.map((raw, idx) => transformInsight(raw, idx));
 
@@ -255,10 +265,9 @@ export const useAiInsights = (options: UseAiInsightsOptions = {}): UseAiInsights
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      if (!silent) {
-        console.error("Failed to fetch AI insights:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch insights");
-      }
+      const safe = err instanceof Error ? err.message : "We couldn't load AI insights. Please try again.";
+      console.error("[useAiInsights] Fetch error:", err);
+      if (!silent) setError(safe);
       setIsConnected(false);
     } finally {
       if (!silent) setLoading(false);

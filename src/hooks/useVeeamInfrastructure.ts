@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_VEEAM_VMS_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 export interface VeeamVMRawJson {
   vm_metrics: {
@@ -157,20 +158,30 @@ export const useVeeamInfrastructure = (
         headers: { Accept: "application/json" },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
+      const result = await safeParseResponse<VeeamVM[]>(response, VEEAM_VMS_ENDPOINT);
+      if (!result.ok) {
+        throw new Error(result.userMessage);
       }
 
-      const data = await response.json();
-      const vmsArray = Array.isArray(data) ? data : [data];
+      if (!result.data) {
+        setVMs([]);
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+        if (!silent) setLoading(false);
+        return;
+      }
+
+      const vmsArray = Array.isArray(result.data) ? result.data : [result.data];
 
       setVMs(vmsArray);
       setIsConnected(true);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      console.error("Failed to fetch Veeam VMs:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch VMs");
+      const safe = err instanceof Error ? err.message : "We couldn't load Veeam VMs. Please try again.";
+      console.error("[useVeeamInfrastructure] Fetch error:", err);
+      if (!silent) setError(safe);
       setIsConnected(false);
     } finally {
       if (!silent) setLoading(false);

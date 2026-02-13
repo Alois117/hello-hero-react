@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_ZABBIX_HOSTS_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 // ────────────────────────────────────────────────
 // Endpoint Configuration
@@ -142,12 +143,12 @@ export const useZabbixHosts = (pageSize = 10): UseZabbixHostsReturn => {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await safeParseResponse<ZabbixHostRaw[]>(response, WEBHOOK_URL);
+      if (!result.ok) {
+        throw new Error(result.userMessage);
       }
 
-      const data = await response.json();
-      const rawHosts: ZabbixHostRaw[] = Array.isArray(data) ? data : [];
+      const rawHosts: ZabbixHostRaw[] = Array.isArray(result.data) ? result.data : [];
 
       // Transform and validate
       const transformed = rawHosts
@@ -173,9 +174,9 @@ export const useZabbixHosts = (pageSize = 10): UseZabbixHostsReturn => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      // Don't log sensitive data - only log error type
-      console.error("Failed to fetch Zabbix hosts");
-      setError(err instanceof Error ? err.message : "Failed to fetch hosts");
+      const safe = err instanceof Error ? err.message : "We couldn't load Zabbix hosts. Please try again.";
+      console.error("[useZabbixHosts] Fetch error:", err);
+      if (!silent) setError(safe);
       setIsConnected(false);
     } finally {
       if (!silent) setLoading(false);

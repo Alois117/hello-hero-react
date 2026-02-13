@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  HardDrive,
   Search,
   TriangleAlert,
   Shield,
@@ -40,7 +39,15 @@ import {
   WifiOff,
 } from "lucide-react";
 
-import type { Job, MatchedVm, UnprotectedVm, OrphanJob, MultiVmJob, Replica, ChangedJob } from "@/pages/user/backup-replication/types";
+import type {
+  Job,
+  MatchedVm,
+  UnprotectedVm,
+  OrphanJob,
+  MultiVmJob,
+  Replica,
+  ChangedJob,
+} from "@/pages/user/backup-replication/types";
 import { formatDateTime } from "@/pages/user/backup-replication/utils/format";
 import { usePagination } from "@/pages/user/backup-replication/hooks/usePagination";
 import StatusBadge from "@/pages/user/backup-replication/components/shared/StatusBadge";
@@ -50,6 +57,7 @@ import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetai
 import ChangeActivityDrawer from "@/pages/user/backup-replication/components/ChangeActivityDrawer";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_BACKUP_REPLICATION_URL } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
 const ENDPOINT = WEBHOOK_BACKUP_REPLICATION_URL;
 
@@ -73,14 +81,6 @@ type MetaObject = {
 
 function safeLower(v: unknown) {
   return String(v ?? "").toLowerCase();
-}
-
-function overallStatusBadgeVariant(status?: string) {
-  const s = safeLower(status);
-  if (s.includes("success")) return "default";
-  if (s.includes("warn")) return "secondary";
-  if (s.includes("stale")) return "destructive";
-  return "secondary";
 }
 
 function backupCurrentBadge(backupCurrent?: boolean) {
@@ -128,12 +128,8 @@ function SummaryCard({ title, value, icon: Icon, variant, onClick }: SummaryCard
       <div className={`mb-2 p-2 rounded-md ${iconClasses[variant]}`}>
         <Icon className="w-4 h-4" />
       </div>
-      <div className="mt-1 text-xs font-medium text-muted-foreground">
-        {title}
-      </div>
-      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
-        {value}
-      </div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">{title}</div>
+      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">{value}</div>
     </Card>
   );
 }
@@ -172,12 +168,8 @@ function ChangeSummaryCard({
       <div className="mb-2 p-2 rounded-md bg-primary/10 text-primary">
         <Pencil className="w-4 h-4" />
       </div>
-      <div className="mt-1 text-xs font-medium text-muted-foreground">
-        Change Activity
-      </div>
-      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
-        {total}
-      </div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">Change Activity</div>
+      <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">{total}</div>
     </Card>
   );
 }
@@ -201,36 +193,77 @@ const BackupReplication = () => {
   const [activeView, setActiveView] = useState("protected");
 
   const loading = status === "loading";
-
   const { authenticatedFetch } = useAuthenticatedFetch();
 
-  const refresh = async (isSilent = false) => {
-    if (!isSilent) setStatus("loading");
-    setError(null);
+  // Track whether we have ever successfully loaded data,
+  // so silent refresh failures don't flip UI to error state.
+  const hasLoadedOnceRef = useRef(false);
 
-    try {
-      const res = await authenticatedFetch(ENDPOINT, {
-        method: "POST",
-        headers: { Accept: "application/json" },
-      });
+  const refresh = useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) setStatus("loading");
+      if (!isSilent) setError(null);
 
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      try {
+        const res = await authenticatedFetch(ENDPOINT, {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
 
-      const json: unknown = await res.json();
-      setRaw(json);
-      setLastUpdatedAt(new Date());
-      setStatus("success");
-    } catch (e: unknown) {
-      setError((e as Error)?.message || "Failed to load backup & replication data");
-      setStatus("error");
-    }
-  };
+        // Centralized safe parsing (NO res.json() directly)
+        const result = await safeParseResponse<unknown>(res, ENDPOINT);
+
+        if (!result.ok) {
+          // Console-only technical details (safeParseResponse should already be sanitizing)
+          console.error("[BackupReplication] Fetch error:", {
+            endpoint: ENDPOINT,
+            status: result.status,
+            userMessage: result.userMessage,
+            debug: (result as any).debug,
+            errorId: (result as any).errorId,
+          });
+
+          // On silent refresh, do not wipe UI state if we've already loaded once
+          if (isSilent && hasLoadedOnceRef.current) return;
+
+          setError(result.userMessage || "We couldn't load backup & replication data. Please try again.");
+          setStatus("error");
+          return;
+        }
+
+        // If webhook returns nothing / empty body, treat as "no data yet"
+        if (!result.data) {
+          setRaw(null);
+          setLastUpdatedAt(new Date());
+          setStatus("success");
+          setError(null);
+          hasLoadedOnceRef.current = true;
+          return;
+        }
+
+        setRaw(result.data);
+        setLastUpdatedAt(new Date());
+        setStatus("success");
+        setError(null);
+        hasLoadedOnceRef.current = true;
+      } catch (e: unknown) {
+        // Network errors or unexpected exceptions
+        console.error("[BackupReplication] Unexpected fetch exception:", e);
+
+        if (isSilent && hasLoadedOnceRef.current) return;
+
+        setError("We couldn't load backup & replication data. Please try again.");
+        setStatus("error");
+      }
+    },
+    [authenticatedFetch]
+  );
 
   useEffect(() => {
-    refresh();
+    refresh(false);
     const interval = setInterval(() => refresh(true), 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refresh]);
 
   // Search & filter state
   const [query, setQuery] = useState("");
@@ -343,22 +376,19 @@ const BackupReplication = () => {
     setJobDrawerOpen(true);
   };
 
+  const showNoDataBanner = !loading && !error && !raw;
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header - Only Updated timestamp + green/red connection icon */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        {/* Left side: Timestamp + status icon */}
         <div className="flex items-center gap-3">
           {lastUpdatedAt && (
             <div className="flex items-center gap-3">
-              <Badge 
-                variant="outline" 
-                className="text-muted-foreground border-none px-0" // no background, no border
-              >
+              <Badge variant="outline" className="text-muted-foreground border-none px-0">
                 Updated: {lastUpdatedAt.toLocaleTimeString()}
               </Badge>
 
-              {/* Connection status icon: Green when success, Red when error */}
               <div className="flex items-center gap-1">
                 {status === "success" ? (
                   <Wifi className="w-4 h-4 text-success animate-pulse-slow" />
@@ -372,9 +402,17 @@ const BackupReplication = () => {
           )}
         </div>
 
-        {/* Right side: Empty (you can add anything here later if needed) */}
         <div />
       </div>
+
+      {/* Friendly “no data yet” banner when webhook returns empty */}
+      {showNoDataBanner && (
+        <div className="rounded-lg border border-border bg-muted/20 p-4">
+          <div className="text-sm text-muted-foreground">
+            No data available yet. Please check back shortly.
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
@@ -474,7 +512,10 @@ const BackupReplication = () => {
                   />
                 </div>
 
-                <Select value={powerStateFilter} onValueChange={(v: "all" | "running" | "off") => setPowerStateFilter(v)}>
+                <Select
+                  value={powerStateFilter}
+                  onValueChange={(v: "all" | "running" | "off") => setPowerStateFilter(v)}
+                >
                   <SelectTrigger className="w-[130px] bg-muted/30">
                     <SelectValue placeholder="Power State" />
                   </SelectTrigger>
@@ -485,7 +526,10 @@ const BackupReplication = () => {
                   </SelectContent>
                 </Select>
 
-                <Select value={protectedFilter} onValueChange={(v: "all" | "protected" | "unprotected") => setProtectedFilter(v)}>
+                <Select
+                  value={protectedFilter}
+                  onValueChange={(v: "all" | "protected" | "unprotected") => setProtectedFilter(v)}
+                >
                   <SelectTrigger className="w-[140px] bg-muted/30">
                     <SelectValue placeholder="Protection" />
                   </SelectTrigger>
@@ -496,7 +540,10 @@ const BackupReplication = () => {
                   </SelectContent>
                 </Select>
 
-                <Select value={statusFilter} onValueChange={(v: "all" | "success" | "warning" | "stale") => setStatusFilter(v)}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v: "all" | "success" | "warning" | "stale") => setStatusFilter(v)}
+                >
                   <SelectTrigger className="w-[130px] bg-muted/30">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -522,7 +569,6 @@ const BackupReplication = () => {
               </div>
             )}
 
-            {/* Only show loading on initial load */}
             {loading && (
               <div className="text-sm text-muted-foreground py-10 text-center">
                 Loading backup & replication data…
@@ -934,34 +980,45 @@ function ChangeActivityContent({ changes, changeSummary, loading, onSelectJob }:
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-muted-foreground">New Jobs</div>
-              <div className="text-2xl font-bold text-emerald-500">{changeSummary?.newJobs ?? tabData.new.length}</div>
+              <div className="text-2xl font-bold text-emerald-500">
+                {changeSummary?.newJobs ?? tabData.new.length}
+              </div>
             </div>
             <Plus className="w-5 h-5 text-emerald-500" />
           </div>
         </Card>
+
         <Card className="p-4 border border-blue-500/30 bg-blue-500/5">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-muted-foreground">Modified Jobs</div>
-              <div className="text-2xl font-bold text-blue-500">{changeSummary?.modifiedJobs ?? tabData.modified.length}</div>
+              <div className="text-2xl font-bold text-blue-500">
+                {changeSummary?.modifiedJobs ?? tabData.modified.length}
+              </div>
             </div>
             <Pencil className="w-5 h-5 text-blue-500" />
           </div>
         </Card>
+
         <Card className="p-4 border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-muted-foreground">Enabled Jobs</div>
-              <div className="text-2xl font-bold text-amber-500">{changeSummary?.enabledJobs ?? tabData.enabled.length}</div>
+              <div className="text-2xl font-bold text-amber-500">
+                {changeSummary?.enabledJobs ?? tabData.enabled.length}
+              </div>
             </div>
             <Power className="w-5 h-5 text-amber-500" />
           </div>
         </Card>
+
         <Card className="p-4 border border-red-500/30 bg-red-500/5">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-muted-foreground">Disabled Jobs</div>
-              <div className="text-2xl font-bold text-red-500">{changeSummary?.disabledJobs ?? tabData.disabled.length}</div>
+              <div className="text-2xl font-bold text-red-500">
+                {changeSummary?.disabledJobs ?? tabData.disabled.length}
+              </div>
             </div>
             <PowerOff className="w-5 h-5 text-red-500" />
           </div>

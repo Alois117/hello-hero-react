@@ -32,6 +32,7 @@ export interface Alert {
   // Extended fields from webhook
   aiInsights?: string;
   timesSent?: number;
+  seenCount?: number;
   firstSeen?: string;
   lastSeen?: string;
   dedupeKey?: string;
@@ -88,7 +89,8 @@ const AlertsTable = ({
       return (
         alert.host.toLowerCase().includes(query) ||
         alert.problem.toLowerCase().includes(query) ||
-        alert.category.toLowerCase().includes(query)
+        alert.category.toLowerCase().includes(query) ||
+        (alert.aiInsights?.toLowerCase().includes(query) ?? false)
       );
     }
     

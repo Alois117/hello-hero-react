@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -7,19 +7,19 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Clock, 
-  CheckCircle, 
-  MessageSquare, 
-  Eye, 
-  EyeOff, 
-  RefreshCw, 
-  ExternalLink, 
+import {
+  Clock,
+  CheckCircle,
+  MessageSquare,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  ExternalLink,
   AlertCircle,
   Copy,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
-import SeverityBadge, { AlertSeverity } from "./SeverityBadge";
+import SeverityBadge from "./SeverityBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Accordion,
@@ -28,20 +28,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { Alert } from "./AlertsTable";   // ← Import the shared Alert type
+import { Alert } from "./AlertsTable";
+import { sanitizeHtml, extractZabbixUrl } from "@/utils/sanitizeHtml";
 
 interface AlertDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  alert: Alert | null;   // ← Now uses the same Alert type (rawMetadata is optional)
+  alert: Alert | null;
 }
-
-// Parse markdown-style AI response (unchanged)
-const parseAIInsights = (aiResponse: string) => {
-  if (!aiResponse) return null;
-  const cleaned = aiResponse.trim();
-  return cleaned;
-};
 
 const AlertDetailDrawer = ({
   open,
@@ -54,10 +48,20 @@ const AlertDetailDrawer = ({
   const [isStreaming, setIsStreaming] = useState(false);
   const { toast } = useToast();
 
+  const sanitizedInsights = useMemo(
+    () => (alert?.aiInsights ? sanitizeHtml(alert.aiInsights) : ""),
+    [alert?.aiInsights]
+  );
+
+  const zabbixUrl = useMemo(
+    () => (alert?.aiInsights ? extractZabbixUrl(alert.aiInsights) : null),
+    [alert?.aiInsights]
+  );
+
   if (!alert) return null;
 
   const hasRealAIInsights = !!alert.aiInsights;
-  const parsedInsights = parseAIInsights(alert.aiInsights || "");
+  const occurrences = alert.seenCount ?? alert.timesSent ?? 1;
 
   const handleRetryAI = () => {
     setAiLoading(true);
@@ -78,7 +82,6 @@ const AlertDetailDrawer = ({
     });
   };
 
-  // Calculate duration display (unchanged)
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleString();
@@ -86,7 +89,7 @@ const AlertDetailDrawer = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent 
+      <SheetContent
         className="w-full sm:max-w-2xl overflow-y-auto"
         aria-label="Alert details drawer"
       >
@@ -120,38 +123,38 @@ const AlertDetailDrawer = ({
             </div>
           </div>
 
-          {/* Quick Action Links */}
+          {/* Single Action Button – View in Zabbix */}
           <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              aria-label="View alert in Zabbix"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View in Zabbix
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              aria-label="View raw logs"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View Raw Logs
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              aria-label="View in Wazuh"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View in Wazuh
-            </Button>
+            {zabbixUrl ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-primary/40 hover:border-primary hover:bg-primary/10 transition-all"
+                asChild
+              >
+                <a
+                  href={zabbixUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View in Zabbix
+                </a>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <ExternalLink className="w-3 h-3" />
+                View in Zabbix
+              </Button>
+            )}
           </div>
 
-          {/* Raw Metadata – now safe with optional chaining */}
+          {/* Raw Metadata */}
           <div className="cyber-card">
             <h3 className="text-lg font-semibold mb-3">Raw Metadata</h3>
             <div className="p-4 bg-muted/50 rounded-lg font-mono text-xs">
@@ -199,14 +202,17 @@ const AlertDetailDrawer = ({
             </div>
           </div>
 
-          {/* AI Insights - Real data from webhook */}
+          {/* AI Insights – rendered as sanitized HTML */}
           <div className="cyber-card border-primary/30">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-semibold">AI Insights</h3>
                 {hasRealAIInsights && (
-                  <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-primary/10 text-primary border-primary/30"
+                  >
                     Live
                   </Badge>
                 )}
@@ -229,7 +235,9 @@ const AlertDetailDrawer = ({
                   onClick={() => setShowAIInsights(!showAIInsights)}
                   className="gap-2"
                   aria-expanded={showAIInsights}
-                  aria-label={showAIInsights ? "Hide AI insights" : "Show AI insights"}
+                  aria-label={
+                    showAIInsights ? "Hide AI insights" : "Show AI insights"
+                  }
                 >
                   {showAIInsights ? (
                     <>
@@ -253,19 +261,31 @@ const AlertDetailDrawer = ({
                     {isStreaming && (
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                        <span className="text-xs text-muted-foreground">AI analyzing...</span>
+                        <span className="text-xs text-muted-foreground">
+                          AI analyzing...
+                        </span>
                       </div>
                     )}
-                    <Skeleton className="h-4 w-full animate-pulse" />
-                    <Skeleton className="h-4 w-5/6 animate-pulse" style={{ animationDelay: "100ms" }} />
-                    <Skeleton className="h-4 w-4/6 animate-pulse" style={{ animationDelay: "200ms" }} />
+                    <Skeleton
+                      className="h-4 w-full animate-pulse"
+                    />
+                    <Skeleton
+                      className="h-4 w-5/6 animate-pulse"
+                      style={{ animationDelay: "100ms" }}
+                    />
+                    <Skeleton
+                      className="h-4 w-4/6 animate-pulse"
+                      style={{ animationDelay: "200ms" }}
+                    />
                   </div>
                 ) : aiError ? (
                   <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/30">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium mb-2">AI Insights Unavailable</p>
+                        <p className="text-sm font-medium mb-2">
+                          AI Insights Unavailable
+                        </p>
                         <p className="text-xs text-muted-foreground mb-3">
                           Unable to generate AI insights at this time.
                         </p>
@@ -282,32 +302,42 @@ const AlertDetailDrawer = ({
                       </div>
                     </div>
                   </div>
-                ) : hasRealAIInsights && parsedInsights ? (
+                ) : hasRealAIInsights && sanitizedInsights ? (
                   <div className="space-y-3">
                     <div className="p-4 bg-primary/5 rounded-lg">
-                      <div className="prose prose-sm prose-invert max-w-none">
-                        <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">
-                          {parsedInsights}
-                        </pre>
-                      </div>
+                      <div
+                        className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed [&_b]:font-bold [&_strong]:font-bold [&_a]:text-primary [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizedInsights,
+                        }}
+                      />
                     </div>
-                    
-                    <Accordion type="single" collapsible className="w-full">
+
+                    <Accordion
+                      type="single"
+                      collapsible
+                      className="w-full"
+                    >
                       <AccordionItem value="reasoning">
                         <AccordionTrigger className="text-sm">
                           View Raw AI Response
                         </AccordionTrigger>
                         <AccordionContent>
-                          <pre className="p-3 bg-muted/50 rounded-lg text-xs overflow-auto max-h-48">
-                            {alert.aiInsights}
-                          </pre>
+                          <div className="p-4 bg-muted/30 rounded-lg border border-border/50">
+                            <div
+                              className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed [&_b]:font-bold [&_strong]:font-bold [&_a]:text-primary [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5"
+                              dangerouslySetInnerHTML={{
+                                __html: sanitizedInsights,
+                              }}
+                            />
+                          </div>
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>
 
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full gap-2"
                       aria-label="Get deeper AI explanation"
                     >
@@ -326,7 +356,7 @@ const AlertDetailDrawer = ({
             )}
           </div>
 
-          {/* Throttle/Dedupe - Real data */}
+          {/* Throttle/Dedupe – uses seenCount for occurrences */}
           <div className="cyber-card">
             <h3 className="text-lg font-semibold mb-3">
               Throttle & Deduplication
@@ -334,20 +364,24 @@ const AlertDetailDrawer = ({
             <div className="p-4 bg-muted/50 rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Occurrences:</span>
-                <span className="font-medium">{alert.timesSent || 1} times</span>
+                <span className="font-medium">{occurrences} times</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">First Seen:</span>
-                <span className="font-medium">{formatDate(alert.firstSeen)}</span>
+                <span className="font-medium">
+                  {formatDate(alert.firstSeen)}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Last Seen:</span>
-                <span className="font-medium">{formatDate(alert.lastSeen)}</span>
+                <span className="font-medium">
+                  {formatDate(alert.lastSeen)}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Throttle Status:</span>
                 <Badge variant="secondary">
-                  {(alert.timesSent || 1) > 1 ? "Active" : "Inactive"}
+                  {occurrences > 1 ? "Active" : "Inactive"}
                 </Badge>
               </div>
             </div>
@@ -356,7 +390,7 @@ const AlertDetailDrawer = ({
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t">
             {!alert.acknowledged && (
-              <Button 
+              <Button
                 className="flex-1"
                 aria-label="Acknowledge this alert"
               >
@@ -364,8 +398,8 @@ const AlertDetailDrawer = ({
                 Acknowledge
               </Button>
             )}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex-1"
               aria-label="Add comment to alert"
             >

@@ -23,9 +23,9 @@ interface UserLayoutProps {
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: ServerIcon, label: "Zabbix", path: "/dashboard/zabbix" },
-  { icon: Database, label: "Veeam", path: "/dashboard/veeam" },
-  { icon: Lightbulb, label: "Insights", path: "/dashboard/insights" },
+  { icon: ServerIcon, label: "Zabbix Metrics", path: "/dashboard/zabbix" },
+  { icon: Database, label: "Veeam Metrics", path: "/dashboard/veeam" },
+  { icon: Lightbulb, label: "AI Insights", path: "/dashboard/insights" },
   { icon: FileText, label: "Reports", path: "/dashboard/reports" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
 ];

@@ -111,7 +111,7 @@ const Login = () => {
               className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-background font-semibold py-6 rounded-xl glow-primary transition-all"
             >
               <Lock className="w-4 h-4 mr-2" />
-              Login
+              Login 
             </Button>
             <div className="text-center text-xs text-muted-foreground">
               <p>Protected by enterprise-grade SSO</p>

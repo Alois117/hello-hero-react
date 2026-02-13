@@ -44,7 +44,6 @@
     "@react-three/fiber": "^8.18.0",
     "@reduxjs/toolkit": "^2.11.2",
     "@studio-freight/lenis": "^1.0.42",
-    "@supabase/supabase-js": "^2.93.3",
     "@tanstack/react-query": "^5.83.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -82,7 +81,6 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
-    "@types/html2pdf.js": "^0.10.0",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",

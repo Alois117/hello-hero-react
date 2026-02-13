@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import keycloak from '@/keycloak/config/keycloak';
 import { useAuth } from '@/keycloak/context/AuthContext';
 import { KEYCLOAK_USERINFO_URL, BACKEND_URL } from '@/config/env';
+import { safeParseResponse } from '@/lib/safeFetch';
 
 // ─── Keycloak userinfo response shape ───
 interface KeycloakUserInfo {
@@ -98,15 +99,15 @@ export function useUserProfile() {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch profile (${response.status})`);
+      const result = await safeParseResponse<KeycloakUserInfo>(response, url);
+      if (!result.ok) {
+        throw new Error(result.userMessage || 'Failed to load profile');
       }
 
-      const data: KeycloakUserInfo = await response.json();
-      setProfile(mapUserInfo(data));
+      setProfile(mapUserInfo(result.data));
     } catch (err: any) {
       console.error('[useUserProfile] Fetch error:', err);
-      setError(err.message || 'Failed to load profile');
+      setError(err.message || 'We couldn\'t load your profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -131,8 +132,13 @@ export function useUserProfile() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Update failed (${response.status})`);
+        let errorMsg = `Update failed (${response.status})`;
+        try {
+          const errorResult = await safeParseResponse<any>(response, `${BACKEND_URL}/update-profile`);
+          if (!errorResult.ok) errorMsg = errorResult.userMessage;
+          else if (errorResult.data?.error) errorMsg = errorResult.data.error;
+        } catch { /* use default */ }
+        throw new Error(errorMsg);
       }
 
       // Re-fetch profile to get official state

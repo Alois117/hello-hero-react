@@ -28,9 +28,7 @@ import {
 } from "@/components/zabbix/hosts";
 
 const Zabbix = () => {
-  // ────────────────────────────────────────────────
   // Alerts State & Data
-  // ────────────────────────────────────────────────
   const [selectedSeverities, setSelectedSeverities] = useState<AlertSeverity[]>([
     "disaster",
     "high",
@@ -49,9 +47,7 @@ const Zabbix = () => {
     lastUpdated: alertsLastUpdated,
   } = useAlerts();
 
-  // ────────────────────────────────────────────────
   // Zabbix Hosts State & Data
-  // ────────────────────────────────────────────────
   const {
     paginatedHosts,
     loading: hostsLoading,
@@ -84,7 +80,7 @@ const Zabbix = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Zabbix</h1>
+            <h1 className="text-3xl font-bold">Zabbix Metrics</h1>
             <p className="text-muted-foreground mt-1">
               Manage Zabbix alerts and monitored hosts
             </p>
@@ -104,9 +100,7 @@ const Zabbix = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* ═══════════════════════════════════════════════════════════════════
-              ALERTS TAB
-          ═══════════════════════════════════════════════════════════════════ */}
+          {/* ALERTS TAB */}
           <TabsContent value="alerts" className="space-y-6 mt-6">
             {/* Alerts Header */}
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -171,17 +165,15 @@ const Zabbix = () => {
             />
           </TabsContent>
 
-          {/* ═══════════════════════════════════════════════════════════════════
-              HOSTS TAB - Real data from webhook with silent auto-refresh
-          ═══════════════════════════════════════════════════════════════════ */}
+          {/* HOSTS TAB */}
           <TabsContent value="hosts" className="space-y-6 mt-6">
-            {/* Hosts Header - Mirrors Alerts header layout */}
+            {/* Hosts Header */}
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
                 <p className="text-muted-foreground">
                   {hostCounts.total} monitored hosts
                 </p>
-                {/* Connection status indicator - same as Alerts */}
+                {/* Connection status indicator */}
                 <div className="flex items-center gap-1 text-xs">
                   {hostsConnected ? (
                     <>
@@ -195,7 +187,7 @@ const Zabbix = () => {
                     </>
                   )}
                 </div>
-                {/* Last updated timestamp - same format as Alerts */}
+                {/* Last updated timestamp */}
                 {hostsLastUpdated && (
                   <span className="text-xs text-muted-foreground">
                     Updated: {hostsLastUpdated.toLocaleTimeString()}

@@ -3,6 +3,7 @@ import { Alert } from "@/components/alerts/AlertsTable";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
 import { WEBHOOK_ALERTS_URL } from "@/config/env";
+import { safeParseResponse, networkError } from "@/lib/safeFetch";
 
 const WEBHOOK_URL = WEBHOOK_ALERTS_URL;
 const REFRESH_INTERVAL = 5000; // 5 seconds
@@ -156,6 +157,7 @@ const transformWebhookAlert = (webhook: WebhookAlert): Alert => {
     // Extended fields for drawer / details
     aiInsights: webhook.first_ai_response,
     timesSent: webhook.times_sent,
+    seenCount: webhook.seen_count,
     firstSeen: webhook.first_seen,
     lastSeen: webhook.last_seen_at,
     dedupeKey,
@@ -240,12 +242,22 @@ export const useAlerts = (): UseAlertsReturn => {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await safeParseResponse<WebhookAlert[]>(response, WEBHOOK_URL);
+      if (!result.ok) {
+        throw new Error(result.userMessage);
       }
 
-      const data = await response.json();
-      const webhookAlerts: WebhookAlert[] = Array.isArray(data) ? data : [data];
+      // Empty response → treat as no alerts
+      if (!result.data) {
+        setAlerts([]);
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+        if (!silent) setLoading(false);
+        return;
+      }
+
+      const webhookAlerts: WebhookAlert[] = Array.isArray(result.data) ? result.data : [result.data];
 
       // Transform & filter out obviously invalid entries
       const transformed = webhookAlerts
@@ -271,8 +283,9 @@ export const useAlerts = (): UseAlertsReturn => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      console.error("Failed to fetch alerts:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch alerts");
+      const safe = err instanceof Error ? err.message : "We couldn't load alerts. Please try again.";
+      console.error("[useAlerts] Fetch error:", err);
+      if (!silent) setError(safe);
       setIsConnected(false);
     } finally {
       if (!silent) setLoading(false);

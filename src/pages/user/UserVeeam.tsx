@@ -1,7 +1,7 @@
 import { useState } from "react";
 import UserLayout from "@/layouts/UserLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card"; // ← ADDED BACK - fixes all 'Cannot find name Card' errors
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Your new Backup & Replication component
-import BackupReplication from "./BackupReplication"; // ← Your requested import path
+// Backup & Replication component
+import BackupReplication from "./BackupReplication"; 
 
 // Alarms imports
 import { useVeeamAlarms, VeeamAlarm, getRelativeTime } from "@/hooks/useVeeamAlarms";
@@ -61,7 +61,7 @@ const UserVeeam = () => {
             <Database className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Veeam</h1>
+            <h1 className="text-3xl font-bold">Veeam Metrics</h1>
             <p className="text-muted-foreground">Backup & Replication Management</p>
           </div>
         </div>
@@ -82,14 +82,13 @@ const UserVeeam = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Backup & Replication Tab – Now using your new component */}
+          {/* Backup & Replication Tab */}
           <TabsContent value="backup" className="space-y-6">
             <BackupReplication />
           </TabsContent>
 
-          {/* Alarms Tab – UNCHANGED */}
+          {/* Alarms Tab */}
           <TabsContent value="alarms" className="space-y-6">
-            {/* ... entire alarms content as before ... */}
             {/* Status Bar */}
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">

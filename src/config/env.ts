@@ -7,8 +7,8 @@
  */
 
 // ─── Keycloak / Auth ────────────────────────────────────────────────────────
-export const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080';
-export const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'Jarvis';
+export const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'https://10.100.12.141:8443';
+export const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'Avis';
 export const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend';
 
 /** Fully qualified OIDC userinfo endpoint */
@@ -17,10 +17,11 @@ export const KEYCLOAK_USERINFO_URL =
   `${KEYCLOAK_URL.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/userinfo`;
 
 // ─── Backend / API ──────────────────────────────────────────────────────────
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/api";
+
 
 // ─── Webhook Base URL (optional convenience; each endpoint also has its own var) ─
-export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'http://localhost:5678';
+export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'https://10.100.12.141:5678';
 
 // ─── Webhook Endpoints (each backed by its own env variable) ────────────────
 export const WEBHOOK_ALERTS_URL =
@@ -52,3 +53,14 @@ export const WEBHOOK_JARVIS_ASSISTANT_URL =
 
 export const WEBHOOK_ORGANIZATIONS_URL =
   import.meta.env.VITE_WEBHOOK_ORGANIZATIONS_URL || `${WEBHOOK_BASE_URL}/webhook/organizations`;
+
+// ─── System Logs (Keycloak Audit Events) ────────────────────────────────────
+/** User events (LOGIN, UPDATE_PROFILE, LOGIN_ERROR, etc.) */
+export const KEYCLOAK_EVENTS_URL =
+  import.meta.env.VITE_KEYCLOAK_EVENTS_URL ||
+  `${KEYCLOAK_URL.replace(/\/$/, '')}/admin/realms/${KEYCLOAK_REALM}/events`;
+
+/** Admin events (user create/update/delete, role changes, realm config, etc.) */
+export const KEYCLOAK_ADMIN_EVENTS_URL =
+  import.meta.env.VITE_KEYCLOAK_ADMIN_EVENTS_URL ||
+  `${KEYCLOAK_URL.replace(/\/$/, '')}/admin/realms/${KEYCLOAK_REALM}/admin-events`;
