@@ -135,6 +135,11 @@
     @apply border-border;
   }
   
+  html {
+    /* Fluid base font: 14px at 320px → 16px at 1440px → 20px at 2560px */
+    font-size: clamp(0.875rem, 0.8rem + 0.25vw, 1.25rem);
+  }
+  
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;

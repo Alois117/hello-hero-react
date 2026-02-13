@@ -229,7 +229,7 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
           }`}
           style={{ animationDelay: `${index * 0.05}s` }}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 group-hover:bg-primary/15 transition-colors">
                 <BarChart3 className="w-6 h-6 text-primary" />
@@ -251,7 +251,7 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
             </div>
 
             {/* Action Buttons - Always Visible */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"

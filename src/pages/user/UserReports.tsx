@@ -113,7 +113,7 @@ const UserReports = () => {
 
   return (
     <UserLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-4 sm:space-y-6 3xl:space-y-8 animate-fade-in">
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -175,7 +175,6 @@ const UserReports = () => {
               reports={paginatedReports}
               loading={loading}
               onReportClick={handleReportClick}
-              onDownloadPdf={handleDownloadPdf}
             />
 
             {/* Pagination */}

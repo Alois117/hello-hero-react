@@ -128,8 +128,8 @@ const UserLayout = ({ children }: UserLayoutProps) => {
       )}
 
       {/* DESKTOP HEADER */}
-      <header className="hidden md:flex fixed top-0 right-0 left-64 h-[72px] bg-card/80 backdrop-blur-lg border-b border-border z-40 items-center px-6">
-        <div className="flex-1 max-w-2xl">
+      <header className="hidden md:flex fixed top-0 right-0 left-64 h-[72px] bg-card/80 backdrop-blur-lg border-b border-border z-40 items-center px-4 lg:px-6 3xl:px-10">
+        <div className="flex-1 max-w-xl lg:max-w-2xl 3xl:max-w-3xl">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
@@ -139,7 +139,7 @@ const UserLayout = ({ children }: UserLayoutProps) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 ml-6">
+        <div className="flex items-center gap-3 lg:gap-4 ml-4 lg:ml-6">
           <ThemeToggle />
           <Button variant="ghost" size="icon" className="relative hover:bg-surface">
             <Bell className="w-5 h-5" />
@@ -150,8 +150,10 @@ const UserLayout = ({ children }: UserLayoutProps) => {
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="pt-16 md:pt-[100px] md:ml-64 p-6">
-        {children}
+      <main className="pt-16 md:pt-[100px] md:ml-64 p-4 sm:p-6 3xl:p-8 4xl:p-10">
+        <div className="max-w-[2200px] mx-auto">
+          {children}
+        </div>
       </main>
     </div>
   );
