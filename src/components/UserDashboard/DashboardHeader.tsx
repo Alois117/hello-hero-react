@@ -27,12 +27,12 @@ const DashboardHeader = ({ isConnected, lastUpdated, onRefresh, refreshing }: Da
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
       <div>
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
+        <h1 className="text-2xl sm:text-3xl 3xl:text-4xl font-bold bg-gradient-to-r from-[#43BFC7] to-[#FAA41E] bg-clip-text text-transparent">
           Monitoring Overview
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base">
           Real-time monitoring overview powered by AI
         </p>
       </div>

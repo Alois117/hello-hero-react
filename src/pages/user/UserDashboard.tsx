@@ -18,7 +18,7 @@ const UserDashboard = () => {
 
   return (
     <UserLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-4 sm:space-y-6 3xl:space-y-8 animate-fade-in">
         {/* Header with connection status */}
         <DashboardHeader
           isConnected={isConnected}
@@ -36,13 +36,13 @@ const UserDashboard = () => {
         <DashboardSummaryCards summary={summary} loading={loading} />
 
         {/* Charts Row 1 - Alerts Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 3xl:gap-8">
           <DashboardSeverityChart data={chartData.severityDistribution} loading={loading} />
           <DashboardTimelineChart data={chartData.alertsTimeline} loading={loading} />
         </div>
 
         {/* Charts Row 2 - Hosts & Veeam */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 3xl:gap-8">
           <DashboardTopHosts data={chartData.topNoisyHosts} loading={loading} />
           <DashboardVeeamStatus data={chartData.veeamStatus} loading={loading} />
         </div>
