@@ -3,7 +3,7 @@
  * Fetches combined Veeam data from 3 endpoints:
  * - WEBHOOK_BACKUP_REPLICATION_URL (Backup & Replication)
  * - WEBHOOK_VEEAM_VMS_URL (Infrastructure VMs)
- * - WEBHOOK_JARVIS_ASSISTANT_URL (Jarvis Assistant)
+ * - WEBHOOK_VEEAM_ALARMS_URL (Alarms)
  *
  * Provides search, filters, and pagination (8 items/page) for each tab.
  */
@@ -13,8 +13,9 @@ import { safeParseResponse } from "@/lib/safeFetch";
 import {
   WEBHOOK_BACKUP_REPLICATION_URL,
   WEBHOOK_VEEAM_VMS_URL,
-  WEBHOOK_JARVIS_ASSISTANT_URL,
+  WEBHOOK_VEEAM_ALARMS_URL,
 } from "@/config/env";
+import type { AlarmSeverity, AlarmStatus, TimeRange } from "@/hooks/useVeeamAlarms";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -153,15 +154,25 @@ export interface InfraVM {
   };
 }
 
-// Jarvis Assistant item
-export interface JarvisItem {
-  id: string;
-  type: string;
-  title: string;
-  content: string;
-  timestamp: Date;
-  severity?: string;
-  status?: string;
+// Alarm item (from WEBHOOK_VEEAM_ALARMS_URL)
+export interface VeeamAlarmItem {
+  client_id: number;
+  alarm_id: string;
+  dedupe_key: string;
+  name: string;
+  description: string;
+  severity: string;
+  status: string;
+  entity_type: string;
+  entity_name: string;
+  triggered_at: string | null;
+  resolved_at: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  seen_count: number;
+  times_sent: number;
+  reminder_interval?: number;
+  first_ai_response?: string;
 }
 
 // ─── Pagination helper ──────────────────────────────────────────────────────
@@ -213,7 +224,7 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
   // ── Raw data ──
   const [brData, setBrData] = useState<BackupReplicationData | null>(null);
   const [infraVMs, setInfraVMs] = useState<InfraVM[]>([]);
-  const [jarvisItems, setJarvisItems] = useState<JarvisItem[]>([]);
+  const [alarmItems, setAlarmItems] = useState<VeeamAlarmItem[]>([]);
 
   // ── Search & Filter state ──
   // Backup & Replication tab
@@ -227,8 +238,14 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
   const [infraPowerFilter, setInfraPowerFilter] = useState<"all" | "PoweredOn" | "PoweredOff">("all");
   const [infraProtectionFilter, setInfraProtectionFilter] = useState<"all" | "protected" | "unprotected">("all");
 
-  // Jarvis tab
-  const [jarvisSearch, setJarvisSearch] = useState("");
+  // Alarms tab
+  const [alarmsSearch, setAlarmsSearch] = useState("");
+  const [alarmsStatusFilter, setAlarmsStatusFilter] = useState<AlarmStatus | null>(null);
+  const [alarmsSeverityFilter, setAlarmsSeverityFilter] = useState<AlarmSeverity | null>(null);
+  const [alarmsEntityTypeFilter, setAlarmsEntityTypeFilter] = useState<string | null>(null);
+  const [alarmsTimeRange, setAlarmsTimeRange] = useState<TimeRange>("24h");
+  const [alarmsCustomDateFrom, setAlarmsCustomDateFrom] = useState<Date | undefined>(undefined);
+  const [alarmsCustomDateTo, setAlarmsCustomDateTo] = useState<Date | undefined>(undefined);
 
   // ── Fetch all 3 endpoints ──
   const fetchAll = useCallback(async (silent = false) => {
@@ -236,7 +253,7 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
     if (!silent) setLoading(true);
 
     try {
-      const [brRes, infraRes, jarvisRes] = await Promise.allSettled([
+      const [brRes, infraRes, alarmsRes] = await Promise.allSettled([
         authenticatedFetch(WEBHOOK_BACKUP_REPLICATION_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -245,10 +262,9 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
           method: "POST",
           headers: { Accept: "application/json" },
         }),
-        authenticatedFetch(WEBHOOK_JARVIS_ASSISTANT_URL, {
+        authenticatedFetch(WEBHOOK_VEEAM_ALARMS_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ client_id: clientId }),
+          headers: { Accept: "application/json" },
         }),
       ]);
 
@@ -287,21 +303,67 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
         } catch { /* parsing error */ }
       }
 
-      // Process Jarvis Assistant
-      if (jarvisRes.status === "fulfilled" && jarvisRes.value.ok) {
+      // Process Alarms
+      if (alarmsRes.status === "fulfilled" && alarmsRes.value.ok) {
         try {
-          const data = await jarvisRes.value.json();
-          const rawItems = Array.isArray(data) ? data : [];
-          const items: JarvisItem[] = rawItems.map((item: any, idx: number) => ({
-            id: item.id || item.dedupe_key || `jarvis-${idx}`,
-            type: item.type || item.category || "assistant",
-            title: item.title || item.name || item.subject || "Jarvis Response",
-            content: item.content || item.message || item.response || item.first_ai_response || "",
-            timestamp: item.created_at ? new Date(item.created_at) : new Date(),
-            severity: item.severity,
-            status: item.status,
-          }));
-          setJarvisItems(items);
+          const result = await safeParseResponse<any[]>(alarmsRes.value, WEBHOOK_VEEAM_ALARMS_URL);
+          if (result.ok && result.data && Array.isArray(result.data)) {
+            const severityMap: Record<string, string> = {
+              Error: "Critical",
+              Warning: "Warning",
+              Information: "Info",
+              High: "High",
+              Resolved: "Info",
+            };
+
+            const alarmsArray = result.data
+              .map((item: any) => {
+                if (typeof item !== "object" || item === null) return null;
+                const outerKey = Object.keys(item)[0];
+                if (!outerKey) return null;
+                const inner = item[outerKey];
+                if (!inner) return null;
+
+                const mappedSeverity = severityMap[outerKey] || "Unknown";
+                const isResolved =
+                  outerKey === "Resolved" ||
+                  (inner.description || "").toLowerCase().includes("back to normal");
+                const mappedStatus: string = isResolved ? "Resolved" : "Active";
+
+                return {
+                  client_id: inner.client_id,
+                  alarm_id: inner.triggered_alarm_id || "",
+                  dedupe_key: inner.dedupe_key || "",
+                  name: inner.alarm_name || "",
+                  description: inner.description || "",
+                  severity: mappedSeverity,
+                  status: mappedStatus,
+                  entity_type: inner.object_type || "",
+                  entity_name: inner.object_name || "",
+                  triggered_at: inner.triggered_time || null,
+                  resolved_at: inner.resolved_at || null,
+                  first_seen: inner.first_seen || null,
+                  last_seen: inner.last_seen || null,
+                  seen_count: inner.repeat_count || 0,
+                  times_sent: 0,
+                  reminder_interval: undefined,
+                  first_ai_response: inner.comment || undefined,
+                } as VeeamAlarmItem;
+              })
+              .filter((a): a is VeeamAlarmItem => Boolean(a));
+
+            // Deduplicate by dedupe_key
+            const uniqueMap = new Map<string, VeeamAlarmItem>();
+            alarmsArray.forEach((alarm) => {
+              if (alarm.dedupe_key && !uniqueMap.has(alarm.dedupe_key)) {
+                uniqueMap.set(alarm.dedupe_key, alarm);
+              }
+            });
+
+            setAlarmItems(Array.from(uniqueMap.values()));
+          } else {
+            setAlarmItems([]);
+          }
         } catch { /* parsing error */ }
       }
 
@@ -335,13 +397,13 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
       unprotectedVMs: br?.summary?.protection?.unprotectedVMs ?? br?.vmsWithoutJobs?.length ?? 0,
       totalJobs: br?.summary?.overview?.totalJobs ?? br?.matched?.reduce((acc, m) => acc + (m.jobs?.length ?? 0), 0) ?? 0,
       staleBackups: br?.summary?.backupHealth?.staleBackups ?? 0,
-      activeAlerts: (br?.alerts?.warnings?.length ?? 0) + (br?.alerts?.critical?.length ?? 0),
+      activeAlerts: alarmItems.filter(a => a.status === "Active").length,
       infraVMs: infraVMs.length,
       infraPoweredOn: infraVMs.filter(vm => vm.raw_json?.vm_metrics?.powerState === "PoweredOn").length,
       infraProtected: infraVMs.filter(vm => vm.raw_json?.vm_metrics?.isProtected === true).length,
       loading,
     };
-  }, [brData, infraVMs, loading]);
+  }, [brData, infraVMs, alarmItems, loading]);
 
   // ── Filtered & paginated: Backup & Replication matched VMs ──
   const filteredBRMatched = useMemo(() => {
@@ -408,23 +470,80 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
 
   useEffect(() => { infraPagination.setCurrentPage(1); }, [infraSearch, infraPowerFilter, infraProtectionFilter]);
 
-  // ── Filtered & paginated: Jarvis items ──
-  const filteredJarvis = useMemo(() => {
-    let list = jarvisItems;
-    const q = jarvisSearch.trim().toLowerCase();
+  // ── Filtered & paginated: Alarms ──
+  const alarmsEntityTypes = useMemo(() => {
+    const types = new Set(alarmItems.map(a => a.entity_type).filter(Boolean));
+    return Array.from(types).sort();
+  }, [alarmItems]);
+
+  const alarmsCounts = useMemo(() => ({
+    total: alarmItems.length,
+    active: alarmItems.filter(a => a.status === "Active").length,
+    acknowledged: alarmItems.filter(a => a.status === "Acknowledged").length,
+    resolved: alarmItems.filter(a => a.status === "Resolved").length,
+    suppressed: alarmItems.filter(a => a.status === "Suppressed").length,
+  }), [alarmItems]);
+
+  const filteredAlarms = useMemo(() => {
+    let list = alarmItems;
+    const q = alarmsSearch.trim().toLowerCase();
     if (q) {
-      list = list.filter(item =>
-        item.title.toLowerCase().includes(q) ||
-        item.content.toLowerCase().includes(q) ||
-        item.type.toLowerCase().includes(q)
+      list = list.filter(a =>
+        a.name?.toLowerCase().includes(q) ||
+        a.entity_name?.toLowerCase().includes(q) ||
+        a.entity_type?.toLowerCase().includes(q) ||
+        a.description?.toLowerCase().includes(q)
       );
     }
-    return list.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [jarvisItems, jarvisSearch]);
+    if (alarmsStatusFilter) {
+      list = list.filter(a => a.status === alarmsStatusFilter);
+    }
+    if (alarmsSeverityFilter) {
+      list = list.filter(a => a.severity === alarmsSeverityFilter);
+    }
+    if (alarmsEntityTypeFilter) {
+      list = list.filter(a => a.entity_type === alarmsEntityTypeFilter);
+    }
 
-  const jarvisPagination = usePaginatedList(filteredJarvis);
+    // Time range filter
+    if (alarmsTimeRange !== "custom") {
+      list = list.filter(a => {
+        const alarmTime = a.last_seen || a.triggered_at;
+        if (!alarmTime) return true;
+        const alarmDate = new Date(alarmTime).getTime();
+        let cutoff = 0;
+        switch (alarmsTimeRange) {
+          case "1h": cutoff = Date.now() - 60 * 60 * 1000; break;
+          case "24h": cutoff = Date.now() - 24 * 60 * 60 * 1000; break;
+          case "7d": cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; break;
+        }
+        return cutoff === 0 || alarmDate >= cutoff;
+      });
+    } else {
+      list = list.filter(a => {
+        const alarmTime = a.last_seen || a.triggered_at;
+        if (!alarmTime) return true;
+        const alarmDate = new Date(alarmTime).getTime();
+        if (alarmsCustomDateFrom && alarmDate < alarmsCustomDateFrom.getTime()) return false;
+        if (alarmsCustomDateTo) {
+          const toEnd = new Date(alarmsCustomDateTo);
+          toEnd.setHours(23, 59, 59, 999);
+          if (alarmDate > toEnd.getTime()) return false;
+        }
+        return true;
+      });
+    }
 
-  useEffect(() => { jarvisPagination.setCurrentPage(1); }, [jarvisSearch]);
+    return list.sort((a, b) => {
+      const aTime = a.last_seen || a.triggered_at || "";
+      const bTime = b.last_seen || b.triggered_at || "";
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+  }, [alarmItems, alarmsSearch, alarmsStatusFilter, alarmsSeverityFilter, alarmsEntityTypeFilter, alarmsTimeRange, alarmsCustomDateFrom, alarmsCustomDateTo]);
+
+  const alarmsPagination = usePaginatedList(filteredAlarms);
+
+  useEffect(() => { alarmsPagination.setCurrentPage(1); }, [alarmsSearch, alarmsStatusFilter, alarmsSeverityFilter, alarmsEntityTypeFilter, alarmsTimeRange, alarmsCustomDateFrom, alarmsCustomDateTo]);
 
   return {
     // Summary
@@ -458,11 +577,25 @@ export const useOrganizationVeeamMetrics = (options: UseOrganizationVeeamMetrics
     infraProtectionFilter,
     setInfraProtectionFilter,
 
-    // Jarvis
-    jarvisItems,
-    filteredJarvis,
-    jarvisPagination,
-    jarvisSearch,
-    setJarvisSearch,
+    // Alarms
+    alarmItems,
+    filteredAlarms,
+    alarmsPagination,
+    alarmsCounts,
+    alarmsEntityTypes,
+    alarmsSearch,
+    setAlarmsSearch,
+    alarmsStatusFilter,
+    setAlarmsStatusFilter,
+    alarmsSeverityFilter,
+    setAlarmsSeverityFilter,
+    alarmsEntityTypeFilter,
+    setAlarmsEntityTypeFilter,
+    alarmsTimeRange,
+    setAlarmsTimeRange,
+    alarmsCustomDateFrom,
+    setAlarmsCustomDateFrom,
+    alarmsCustomDateTo,
+    setAlarmsCustomDateTo,
   };
 };

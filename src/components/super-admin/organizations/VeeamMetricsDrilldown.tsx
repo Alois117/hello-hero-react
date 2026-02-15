@@ -1,13 +1,12 @@
 /**
  * Veeam Metrics Drilldown for Super Admin
  * Comprehensive tabbed view mirroring the User Dashboard Veeam Metrics.
- * Tabs: Backup & Replication | Infrastructure | Jarvis Assistant
+ * Tabs: Backup & Replication | Infrastructure | Alarms
  */
 import { useState } from "react";
 import {
   HardDrive,
   Server,
-  Brain,
   Search,
   Shield,
   ShieldOff,
@@ -23,6 +22,7 @@ import {
   Loader2,
   Copy,
   Database as DatabaseIcon,
+  AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,11 +49,23 @@ import {
   useOrganizationVeeamMetrics,
   type BackupReplicationData,
   type InfraVM,
-  type JarvisItem,
+  type VeeamAlarmItem,
+  type BRMatchedVm,
 } from "@/hooks/super-admin/organizations/useOrganizationVeeamMetrics";
 import StatusBadge from "@/pages/user/backup-replication/components/shared/StatusBadge";
 import { formatDateTime } from "@/pages/user/backup-replication/utils/format";
 import { formatLastBackup } from "@/hooks/useVeeamInfrastructure";
+import { getRelativeTime } from "@/hooks/useVeeamAlarms";
+
+// Drawers (reuse from User Dashboard)
+import VmDrawer from "@/pages/user/backup-replication/components/VmDrawer";
+import JobDetailDrawer from "@/pages/user/backup-replication/components/JobDetailDrawer";
+import VeeamVMDetailDrawer from "@/components/veeam/VeeamVMDetailDrawer";
+import VeeamAlarmDetailDrawer from "@/components/veeam/VeeamAlarmDetailDrawer";
+import VeeamAlarmsFilters from "@/components/veeam/VeeamAlarmsFilters";
+import type { VeeamVM } from "@/hooks/useVeeamInfrastructure";
+import type { VeeamAlarm } from "@/hooks/useVeeamAlarms";
+import type { MatchedVm, Job } from "@/pages/user/backup-replication/types";
 
 interface VeeamMetricsDrilldownProps {
   orgName: string;
@@ -210,7 +222,7 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
           <div>
             <h3 className="text-lg font-semibold">Veeam Metrics — {orgName}</h3>
             <p className="text-xs text-muted-foreground">
-              Combined backup, infrastructure & assistant data
+              Combined backup, infrastructure & alarms data
               {hook.lastUpdated && ` · Updated ${hook.lastUpdated.toLocaleTimeString()}`}
             </p>
           </div>
@@ -227,22 +239,21 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
         <MiniStat label="Unprotected" value={s.unprotectedVMs} icon={ShieldOff} variant="destructive" />
         <MiniStat label="Total Jobs" value={s.totalJobs} icon={Briefcase} />
         <MiniStat
-          label="Active Alerts"
+          label="Active Alarms"
           value={s.activeAlerts}
           icon={Bell}
           variant={s.activeAlerts > 0 ? "warning" : "default"}
         />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <MiniStat label="Stale Backups" value={s.staleBackups} icon={Clock} variant={s.staleBackups > 0 ? "warning" : "default"} />
         <MiniStat label="Infra VMs" value={s.infraVMs} icon={Monitor} />
         <MiniStat label="Infra Powered On" value={s.infraPoweredOn} icon={Monitor} variant="success" />
-        <MiniStat label="Infra Protected" value={s.infraProtected} icon={Shield} variant="success" />
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full justify-start bg-muted/30 p-1">
+        <TabsList className="w-full justify-start bg-muted/30 p-1 flex-wrap">
           <TabsTrigger value="backup" className="gap-2 text-xs sm:text-sm">
             <HardDrive className="w-4 h-4" />
             Backup & Replication
@@ -251,9 +262,9 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
             <Server className="w-4 h-4" />
             Infrastructure ({hook.infraVMs.length})
           </TabsTrigger>
-          <TabsTrigger value="jarvis" className="gap-2 text-xs sm:text-sm">
-            <Brain className="w-4 h-4" />
-            Jarvis ({hook.jarvisItems.length})
+          <TabsTrigger value="alarms" className="gap-2 text-xs sm:text-sm">
+            <AlertTriangle className="w-4 h-4" />
+            Alarms ({hook.alarmItems.length})
           </TabsTrigger>
         </TabsList>
 
@@ -267,9 +278,9 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
           <InfrastructureTab hook={hook} />
         </TabsContent>
 
-        {/* ── Jarvis Tab ── */}
-        <TabsContent value="jarvis" className="mt-4 space-y-4">
-          <JarvisTab hook={hook} />
+        {/* ── Alarms Tab ── */}
+        <TabsContent value="alarms" className="mt-4 space-y-4">
+          <AlarmsTab hook={hook} />
         </TabsContent>
       </Tabs>
     </div>
@@ -277,12 +288,28 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Backup & Replication Tab
+// Backup & Replication Tab (with click-to-drawer)
 // ═════════════════════════════════════════════════════════════════════════════
 
 function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizationVeeamMetrics> }) {
   const br = hook.brData;
   const [brSubTab, setBrSubTab] = useState("protected");
+
+  // Drawer states
+  const [selectedVm, setSelectedVm] = useState<MatchedVm | null>(null);
+  const [vmDrawerOpen, setVmDrawerOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [jobDrawerOpen, setJobDrawerOpen] = useState(false);
+
+  const handleVmClick = (item: BRMatchedVm) => {
+    setSelectedVm(item as unknown as MatchedVm);
+    setVmDrawerOpen(true);
+  };
+
+  const handleJobClick = (job: Job) => {
+    setSelectedJob(job);
+    setJobDrawerOpen(true);
+  };
 
   if (!br) {
     return (
@@ -294,7 +321,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
 
   return (
     <div className="space-y-4">
-      {/* Search & Filters (for Protected VMs) */}
+      {/* Search & Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -332,7 +359,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
         </Select>
       </div>
 
-      {/* Sub-tabs mirroring user dashboard */}
+      {/* Sub-tabs */}
       <Tabs value={brSubTab} onValueChange={setBrSubTab} className="w-full">
         <TabsList className="w-full justify-start bg-muted/20 p-1 flex-wrap">
           <TabsTrigger value="protected" className="gap-1.5 text-xs">
@@ -355,9 +382,10 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
           </TabsTrigger>
         </TabsList>
 
-        {/* Protected VMs Table */}
+        {/* Protected VMs Table - clickable rows */}
         <TabsContent value="protected" className="mt-3">
-          <div className="rounded-lg border border-border overflow-hidden">
+          <p className="text-xs text-muted-foreground mb-2">Click a VM row to view details and jobs</p>
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -380,7 +408,11 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
                   hook.brPagination.paginatedItems.map((item, idx) => {
                     const bc = backupCurrentBadge(item.protectionSummary?.backupCurrent);
                     return (
-                      <TableRow key={item.vm?.name ?? idx} className="hover:bg-muted/30 transition-colors">
+                      <TableRow
+                        key={item.vm?.name ?? idx}
+                        className="hover:bg-muted/30 transition-colors cursor-pointer"
+                        onClick={() => handleVmClick(item)}
+                      >
                         <TableCell className="font-medium">{item.vm?.name ?? "—"}</TableCell>
                         <TableCell>
                           <Badge variant={item.vm?.powerState?.toLowerCase().includes("on") ? "default" : "secondary"}>
@@ -413,7 +445,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
 
         {/* Unprotected VMs */}
         <TabsContent value="unprotected" className="mt-3">
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -445,7 +477,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
 
         {/* Orphan Jobs */}
         <TabsContent value="orphan" className="mt-3">
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -481,7 +513,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
 
         {/* Multi-VM Jobs */}
         <TabsContent value="multivm" className="mt-3">
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -517,7 +549,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
 
         {/* Replicas */}
         <TabsContent value="replicas" className="mt-3">
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -551,7 +583,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
           </div>
         </TabsContent>
 
-        {/* Alerts */}
+        {/* B&R Alerts sub-tab */}
         <TabsContent value="alerts" className="mt-3 space-y-4">
           {(br.alerts?.critical?.length ?? 0) > 0 && (
             <div>
@@ -594,15 +626,31 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Drawers */}
+      <VmDrawer
+        open={vmDrawerOpen}
+        onOpenChange={setVmDrawerOpen}
+        vm={selectedVm}
+        onSelectJob={handleJobClick}
+      />
+      <JobDetailDrawer
+        open={jobDrawerOpen}
+        onOpenChange={setJobDrawerOpen}
+        job={selectedJob}
+      />
     </div>
   );
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Infrastructure Tab
+// Infrastructure Tab (with click-to-drawer, 3 cards per row)
 // ═════════════════════════════════════════════════════════════════════════════
 
 function InfrastructureTab({ hook }: { hook: ReturnType<typeof useOrganizationVeeamMetrics> }) {
+  const [selectedVM, setSelectedVM] = useState<VeeamVM | null>(null);
+  const [vmDrawerOpen, setVMDrawerOpen] = useState(false);
+
   return (
     <div className="space-y-4">
       {/* Counts */}
@@ -647,76 +695,86 @@ function InfrastructureTab({ hook }: { hook: ReturnType<typeof useOrganizationVe
         </Select>
       </div>
 
-      {/* VM Cards Grid */}
+      {/* VM Cards Grid — 3 cards max */}
       {hook.infraPagination.paginatedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Server className="w-12 h-12 mb-4 opacity-50" />
           <p>No VMs found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {hook.infraPagination.paginatedItems.map((vm) => {
-            const metrics = vm.raw_json?.vm_metrics;
-            const vmName = vm.raw_json?.vm_name;
-            if (!metrics || !vmName) {
-              return <Card key={vm.vmid} className="p-4 text-center text-muted-foreground">Invalid VM data</Card>;
-            }
-            const isPoweredOn = metrics.powerState === "PoweredOn";
-            const isProtected = !!metrics.isProtected;
+        <>
+          <p className="text-xs text-muted-foreground">Click a VM card to view full details</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {hook.infraPagination.paginatedItems.map((vm) => {
+              const metrics = vm.raw_json?.vm_metrics;
+              const vmName = vm.raw_json?.vm_name;
+              if (!metrics || !vmName) {
+                return <Card key={vm.vmid} className="p-4 text-center text-muted-foreground">Invalid VM data</Card>;
+              }
+              const isPoweredOn = metrics.powerState === "PoweredOn";
+              const isProtected = !!metrics.isProtected;
 
-            return (
-              <Card key={vm.vmid} className="p-4 hover:border-primary/30 transition-all h-full border-border/50">
-                <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${isPoweredOn ? "bg-success/10" : "bg-muted/30"}`}>
-                    <Monitor className={`w-5 h-5 ${isPoweredOn ? "text-success" : "text-muted-foreground"}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold truncate">{vmName}</h4>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant="outline" className={`text-xs ${isPoweredOn ? "text-success border-success/30" : "text-muted-foreground border-muted/30"}`}>
-                        {metrics.powerState || "Unknown"}
-                      </Badge>
-                      <Badge variant="outline" className={`text-xs ${metrics.connectionState === "Connected" ? "text-primary border-primary/30" : "text-destructive border-destructive/30"}`}>
-                        {metrics.connectionState || "Unknown"}
-                      </Badge>
+              return (
+                <Card
+                  key={vm.vmid}
+                  className="p-4 hover:border-primary/30 transition-all h-full border-border/50 cursor-pointer"
+                  onClick={() => {
+                    setSelectedVM(vm as unknown as VeeamVM);
+                    setVMDrawerOpen(true);
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${isPoweredOn ? "bg-success/10" : "bg-muted/30"}`}>
+                      <Monitor className={`w-5 h-5 ${isPoweredOn ? "text-success" : "text-muted-foreground"}`} />
                     </div>
-
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1"><Cpu className="w-3.5 h-3.5" /> CPU</span>
-                        <span className="font-medium">{metrics.cpuCount ?? "?"} vCPU</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1"><Server className="w-3.5 h-3.5" /> Memory</span>
-                        <span className="font-medium">{metrics.memorySizeHuman || "? GB"}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1"><HardDrive className="w-3.5 h-3.5" /> Disk</span>
-                        <span className="font-medium text-xs">{metrics.totalCommittedHuman || "?"} / {metrics.totalAllocatedHuman || "?"}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-border space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Last Backup</span>
-                        <span className="font-medium text-xs">{formatLastBackup(metrics.lastProtectedDate)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          {isProtected ? <Shield className="w-3.5 h-3.5 text-success" /> : <ShieldOff className="w-3.5 h-3.5 text-warning" />}
-                          Protection
-                        </span>
-                        <Badge variant="outline" className={`text-xs ${isProtected ? "text-success border-success/30" : "text-warning border-warning/30"}`}>
-                          {isProtected ? "Protected" : "Not Protected"}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold truncate">{vmName}</h4>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <Badge variant="outline" className={`text-xs ${isPoweredOn ? "text-success border-success/30" : "text-muted-foreground border-muted/30"}`}>
+                          {metrics.powerState || "Unknown"}
+                        </Badge>
+                        <Badge variant="outline" className={`text-xs ${metrics.connectionState === "Connected" ? "text-primary border-primary/30" : "text-destructive border-destructive/30"}`}>
+                          {metrics.connectionState || "Unknown"}
                         </Badge>
                       </div>
+
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1"><Cpu className="w-3.5 h-3.5" /> CPU</span>
+                          <span className="font-medium">{metrics.cpuCount ?? "?"} vCPU</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1"><Server className="w-3.5 h-3.5" /> Memory</span>
+                          <span className="font-medium">{metrics.memorySizeHuman || "? GB"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1"><HardDrive className="w-3.5 h-3.5" /> Disk</span>
+                          <span className="font-medium text-xs">{metrics.totalCommittedHuman || "?"} / {metrics.totalAllocatedHuman || "?"}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-border space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Last Backup</span>
+                          <span className="font-medium text-xs">{formatLastBackup(metrics.lastProtectedDate)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            {isProtected ? <Shield className="w-3.5 h-3.5 text-success" /> : <ShieldOff className="w-3.5 h-3.5 text-warning" />}
+                            Protection
+                          </span>
+                          <Badge variant="outline" className={`text-xs ${isProtected ? "text-success border-success/30" : "text-warning border-warning/30"}`}>
+                            {isProtected ? "Protected" : "Not Protected"}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <PaginationBar
@@ -724,55 +782,143 @@ function InfrastructureTab({ hook }: { hook: ReturnType<typeof useOrganizationVe
         onPageChange={hook.infraPagination.setCurrentPage}
         label="VMs"
       />
+
+      {/* VM Detail Drawer */}
+      <VeeamVMDetailDrawer
+        open={vmDrawerOpen}
+        onOpenChange={setVMDrawerOpen}
+        vm={selectedVM}
+      />
     </div>
   );
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Jarvis Tab
+// Alarms Tab (replaces Jarvis)
 // ═════════════════════════════════════════════════════════════════════════════
 
-function JarvisTab({ hook }: { hook: ReturnType<typeof useOrganizationVeeamMetrics> }) {
+function AlarmsTab({ hook }: { hook: ReturnType<typeof useOrganizationVeeamMetrics> }) {
+  const [selectedAlarm, setSelectedAlarm] = useState<VeeamAlarm | null>(null);
+  const [alarmDrawerOpen, setAlarmDrawerOpen] = useState(false);
+
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={hook.jarvisSearch}
-          onChange={e => hook.setJarvisSearch(e.target.value)}
-          placeholder="Search Jarvis responses…"
-          className="pl-9 bg-muted/30"
+      {/* Status Bar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm text-muted-foreground">{hook.alarmsCounts.total} alarms total</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-destructive/20 text-destructive border-destructive/30">
+            {hook.alarmsCounts.active} Active
+          </Badge>
+          <Badge className="bg-warning/20 text-warning border-warning/30">
+            {hook.alarmsCounts.acknowledged} Acknowledged
+          </Badge>
+          <Badge className="bg-success/20 text-success border-success/30">
+            {hook.alarmsCounts.resolved} Resolved
+          </Badge>
+        </div>
+      </div>
+
+      {/* Search + Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={hook.alarmsSearch}
+            onChange={e => hook.setAlarmsSearch(e.target.value)}
+            placeholder="Search alarms, entities…"
+            className="pl-9 bg-muted/30"
+          />
+        </div>
+        <VeeamAlarmsFilters
+          filterStatus={hook.alarmsStatusFilter}
+          onFilterStatusChange={hook.setAlarmsStatusFilter}
+          filterSeverity={hook.alarmsSeverityFilter}
+          onFilterSeverityChange={hook.setAlarmsSeverityFilter}
+          filterEntityType={hook.alarmsEntityTypeFilter}
+          onFilterEntityTypeChange={hook.setAlarmsEntityTypeFilter}
+          entityTypes={hook.alarmsEntityTypes}
+          timeRange={hook.alarmsTimeRange}
+          onTimeRangeChange={hook.setAlarmsTimeRange}
+          customDateFrom={hook.alarmsCustomDateFrom}
+          onCustomDateFromChange={hook.setAlarmsCustomDateFrom}
+          customDateTo={hook.alarmsCustomDateTo}
+          onCustomDateToChange={hook.setAlarmsCustomDateTo}
         />
       </div>
 
-      {hook.jarvisPagination.paginatedItems.length === 0 ? (
+      {/* Alarm Cards */}
+      {hook.alarmsPagination.paginatedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Brain className="w-12 h-12 mb-4 opacity-50" />
-          <p>{hook.jarvisSearch ? "No results match your search" : "No Jarvis data available"}</p>
+          <AlertTriangle className="w-12 h-12 mb-4 opacity-50" />
+          <p>{hook.alarmsSearch ? "No alarms match your search" : "No alarms available"}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {hook.jarvisPagination.paginatedItems.map(item => (
-            <Card key={item.id} className="p-4 border-border/50 hover:border-primary/30 transition-colors">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-accent/10">
-                  <Brain className="w-4 h-4 text-accent" />
-                </div>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-sm truncate">{item.title}</p>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {item.severity && (
-                        <Badge variant="outline" className="text-xs capitalize">{item.severity}</Badge>
-                      )}
-                      <span className="text-xs text-muted-foreground">{item.timestamp.toLocaleString()}</span>
+          {hook.alarmsPagination.paginatedItems.map((alarm) => (
+            <Card
+              key={alarm.dedupe_key || alarm.alarm_id}
+              className="p-4 hover:border-primary/30 transition-all cursor-pointer border-border/50"
+              onClick={() => {
+                setSelectedAlarm(alarm as unknown as VeeamAlarm);
+                setAlarmDrawerOpen(true);
+              }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <AlertTriangle
+                    className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
+                      alarm.severity?.toLowerCase() === "critical"
+                        ? "text-destructive"
+                        : alarm.severity?.toLowerCase() === "warning"
+                        ? "text-warning"
+                        : alarm.severity?.toLowerCase() === "high"
+                        ? "text-orange-500"
+                        : "text-muted-foreground"
+                    }`}
+                  />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <p className="font-medium truncate">{alarm.name}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                      <Server className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{alarm.entity_name}</span>
+                      <span>•</span>
+                      <span>{alarm.entity_type}</span>
+                      <span>•</span>
+                      <span>{getRelativeTime(alarm.last_seen || alarm.triggered_at)}</span>
                     </div>
+                    {alarm.description && (
+                      <p className="text-xs text-muted-foreground/70 line-clamp-1">{alarm.description}</p>
+                    )}
                   </div>
-                  {item.content && (
-                    <p className="text-xs text-muted-foreground line-clamp-2">{item.content}</p>
-                  )}
-                  <Badge variant="secondary" className="text-xs">{item.type}</Badge>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge
+                    className={
+                      alarm.severity?.toLowerCase() === "critical"
+                        ? "bg-destructive/20 text-destructive border-destructive/30"
+                        : alarm.severity?.toLowerCase() === "warning"
+                        ? "bg-warning/20 text-warning border-warning/30"
+                        : alarm.severity?.toLowerCase() === "high"
+                        ? "bg-orange-500/20 text-orange-500 border-orange-500/30"
+                        : "bg-muted/20 text-muted-foreground border-muted/30"
+                    }
+                  >
+                    {alarm.severity}
+                  </Badge>
+                  <Badge
+                    className={
+                      alarm.status === "Active"
+                        ? "bg-destructive/20 text-destructive border-destructive/30"
+                        : alarm.status === "Resolved"
+                        ? "bg-success/20 text-success border-success/30"
+                        : alarm.status === "Acknowledged"
+                        ? "bg-warning/20 text-warning border-warning/30"
+                        : ""
+                    }
+                  >
+                    {alarm.status}
+                  </Badge>
                 </div>
               </div>
             </Card>
@@ -781,9 +927,16 @@ function JarvisTab({ hook }: { hook: ReturnType<typeof useOrganizationVeeamMetri
       )}
 
       <PaginationBar
-        {...hook.jarvisPagination}
-        onPageChange={hook.jarvisPagination.setCurrentPage}
-        label="items"
+        {...hook.alarmsPagination}
+        onPageChange={hook.alarmsPagination.setCurrentPage}
+        label="alarms"
+      />
+
+      {/* Alarm Detail Drawer */}
+      <VeeamAlarmDetailDrawer
+        open={alarmDrawerOpen}
+        onOpenChange={setAlarmDrawerOpen}
+        alarm={selectedAlarm}
       />
     </div>
   );
