@@ -42,9 +42,9 @@ import {
   HostsDrilldown,
   ReportsDrilldown,
   InsightsDrilldown,
-  VeeamDrilldown,
   UsersDrilldown,
 } from "./drilldown";
+import VeeamMetricsDrilldown from "./VeeamMetricsDrilldown";
 import { DrilldownDetailDrawer } from "./drilldown/detail";
 import { format } from "date-fns";
 
@@ -217,13 +217,10 @@ const OrganizationDetailView = ({
         );
       case "veeam":
         return (
-          <VeeamDrilldown
+          <VeeamMetricsDrilldown
             orgName={organization.name}
-            jobs={veeam.items}
-            loading={veeam.loading}
-            error={veeam.error}
+            clientId={organization.clientId}
             onRefresh={handleRefreshCategory}
-            onItemClick={handleItemClick}
           />
         );
       case "users":
@@ -378,9 +375,9 @@ const OrganizationDetailView = ({
           </div>
         </ClickableMetricCard>
 
-        {/* Veeam Backup */}
+        {/* Veeam Metrics */}
         <ClickableMetricCard 
-          title="Veeam Jobs" 
+          title="Veeam Metrics" 
           icon={HardDrive} 
           loading={metrics.veeam.loading} 
           iconColor="text-success"
