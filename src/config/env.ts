@@ -7,8 +7,8 @@
  */
 
 // ─── Keycloak / Auth ────────────────────────────────────────────────────────
-export const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'https://10.100.12.141:8443';
-export const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'Avis';
+export const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080';
+export const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'Jarvis';
 export const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'react-frontend';
 
 /** Fully qualified OIDC userinfo endpoint */
@@ -21,7 +21,7 @@ export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/api";
 
 
 // ─── Webhook Base URL (optional convenience; each endpoint also has its own var) ─
-export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'https://10.100.12.141:5678';
+export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'http://localhost:5678';
 
 // ─── Webhook Endpoints (each backed by its own env variable) ────────────────
 export const WEBHOOK_ALERTS_URL =
