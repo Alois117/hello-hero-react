@@ -29,6 +29,7 @@ export type DrilldownCategory =
   | "insights"
   | "veeam"
   | "users"
+  | "zabbix_metrics"
   | null;
 
 export interface AlertItem {
@@ -56,6 +57,7 @@ export interface ReportItem {
   id: string;
   name: string;
   report_type: string;
+  report_template?: string;
   status: string;
   created_at: Date;
   client_id?: number;
@@ -447,6 +449,21 @@ export const useOrganizationDetails = (
 
         const createdAt = r.created_at ? new Date(r.created_at) : new Date();
 
+        // Normalize report_template HTML
+        let template = safeString(r.report_template).trim();
+        if (template) {
+          try {
+            const parsed = JSON.parse(template);
+            if (typeof parsed === "string") template = parsed;
+          } catch { /* not JSON-encoded, use as-is */ }
+          template = template
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\t/g, "\t")
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, "\\");
+        }
+
         return {
           id:
             safeString(r.id).trim() ||
@@ -454,6 +471,7 @@ export const useOrganizationDetails = (
             `${clientId}-${safeString(r.report_type) || "report"}-${createdAt.getTime()}-${idx}`,
           name: fallbackName,
           report_type: safeString(r.report_type) || "daily",
+          report_template: template || undefined,
           status: safeString(r.status) || "completed",
           created_at: createdAt,
           client_id: r.client_id,
@@ -621,6 +639,9 @@ export const useOrganizationDetails = (
         case "hosts":
           await fetchHosts();
           break;
+        case "zabbix_metrics":
+          await Promise.all([fetchAlerts(), fetchHosts()]);
+          break;
         case "reports":
           await fetchReports();
           break;
@@ -649,6 +670,10 @@ export const useOrganizationDetails = (
         if (shouldFetch(alerts)) fetchAlerts();
         break;
       case "hosts":
+        if (shouldFetch(hosts)) fetchHosts();
+        break;
+      case "zabbix_metrics":
+        if (shouldFetch(alerts)) fetchAlerts();
         if (shouldFetch(hosts)) fetchHosts();
         break;
       case "reports":

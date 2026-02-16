@@ -15,7 +15,8 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
-  ChevronDown
+  ChevronDown,
+  Activity
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +39,11 @@ import {
   UserItem,
 } from "@/hooks/super-admin/organizations/useOrganizationDetails";
 import {
-  AlertsDrilldown,
-  HostsDrilldown,
   ReportsDrilldown,
   InsightsDrilldown,
   UsersDrilldown,
 } from "./drilldown";
+import ZabbixMetricsDrilldown from "./drilldown/ZabbixMetricsDrilldown";
 import VeeamMetricsDrilldown from "./VeeamMetricsDrilldown";
 import { DrilldownDetailDrawer } from "./drilldown/detail";
 import { format } from "date-fns";
@@ -166,30 +166,30 @@ const OrganizationDetailView = ({
     setSelectedItem(null);
   }, []);
 
+  // Determine the detail drawer category for zabbix_metrics
+  const getDrawerCategory = (): DrilldownCategory => {
+    if (selectedCategory === "zabbix_metrics") {
+      // Determine based on item type
+      if (selectedItem && 'hostid' in selectedItem) return "hosts";
+      if (selectedItem && 'severity' in selectedItem && 'acknowledged' in selectedItem) return "alerts";
+      return "alerts";
+    }
+    return selectedCategory;
+  };
+
   // Render the drilldown content based on selected category
   const renderDrilldown = () => {
     if (!selectedCategory) return null;
 
     switch (selectedCategory) {
-      case "alerts":
+      case "zabbix_metrics":
         return (
-          <AlertsDrilldown
+          <ZabbixMetricsDrilldown
             orgName={organization.name}
-            alerts={alerts.items}
-            loading={alerts.loading}
-            error={alerts.error}
-            onRefresh={handleRefreshCategory}
-            onItemClick={handleItemClick}
-          />
-        );
-      case "hosts":
-        return (
-          <HostsDrilldown
-            orgName={organization.name}
-            hosts={hosts.items}
-            loading={hosts.loading}
-            error={hosts.error}
-            onRefresh={handleRefreshCategory}
+            alerts={alerts}
+            hosts={hosts}
+            onRefreshAlerts={() => refreshCategory("alerts")}
+            onRefreshHosts={() => refreshCategory("hosts")}
             onItemClick={handleItemClick}
           />
         );
@@ -292,46 +292,42 @@ const OrganizationDetailView = ({
 
       {/* Metrics Grid - Clickable Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Alerts */}
+        {/* Zabbix Metrics (combined Alerts + Hosts) */}
         <ClickableMetricCard 
-          title="Alerts" 
-          icon={AlertTriangle} 
-          loading={metrics.alerts.loading} 
-          iconColor="text-warning"
-          isSelected={selectedCategory === "alerts"}
-          onClick={() => handleCardClick("alerts")}
-          category="alerts"
-        >
-          <div className="space-y-2">
-            <p className="text-2xl font-bold">{metrics.alerts.total}</p>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              <span className="text-warning">{metrics.alerts.active} active</span>
-              <span className="text-destructive">{metrics.alerts.critical} critical</span>
-            </div>
-          </div>
-        </ClickableMetricCard>
-
-        {/* Hosts */}
-        <ClickableMetricCard 
-          title="Zabbix Hosts" 
-          icon={Server} 
-          loading={metrics.hosts.loading} 
+          title="Zabbix Metrics" 
+          icon={Activity} 
+          loading={metrics.alerts.loading || metrics.hosts.loading} 
           iconColor="text-primary"
-          isSelected={selectedCategory === "hosts"}
-          onClick={() => handleCardClick("hosts")}
-          category="hosts"
+          isSelected={selectedCategory === "zabbix_metrics"}
+          onClick={() => handleCardClick("zabbix_metrics")}
+          category="zabbix_metrics"
         >
-          <div className="space-y-2">
-            <p className="text-2xl font-bold">{metrics.hosts.total}</p>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-success" />
-                {metrics.hosts.enabled} enabled
-              </span>
-              <span className="flex items-center gap-1">
-                <XCircle className="w-3 h-3 text-destructive" />
-                {metrics.hosts.disabled} disabled
-              </span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-warning" />
+              <div className="flex-1">
+                <p className="text-lg font-bold">{metrics.alerts.total} <span className="text-sm font-normal text-muted-foreground">alerts</span></p>
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span className="text-warning">{metrics.alerts.active} active</span>
+                  <span className="text-destructive">{metrics.alerts.critical} critical</span>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border/30 pt-2 flex items-center gap-3">
+              <Server className="w-4 h-4 text-primary" />
+              <div className="flex-1">
+                <p className="text-lg font-bold">{metrics.hosts.total} <span className="text-sm font-normal text-muted-foreground">hosts</span></p>
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-success" />
+                    {metrics.hosts.enabled} enabled
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <XCircle className="w-3 h-3 text-destructive" />
+                    {metrics.hosts.disabled} disabled
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </ClickableMetricCard>
@@ -449,7 +445,7 @@ const OrganizationDetailView = ({
       <DrilldownDetailDrawer
         open={drawerOpen}
         onClose={handleDrawerClose}
-        category={selectedCategory}
+        category={getDrawerCategory()}
         item={selectedItem}
         orgName={organization.name}
       />
