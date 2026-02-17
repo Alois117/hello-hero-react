@@ -9,6 +9,17 @@ import { KEYCLOAK_ADMIN_API_URL } from "@/config/env";
 
 const BASE = KEYCLOAK_ADMIN_API_URL;
 
+/** Safely parse JSON, returning null if content-type is not JSON */
+async function safeParseJson(response: Response): Promise<any> {
+  const ct = response.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    const text = await response.text();
+    console.error("[useKeycloakUserManagement] Non-JSON response:", text.substring(0, 200));
+    return null;
+  }
+  return response.json();
+}
+
 export interface CreateUserData {
   username?: string;
   firstName?: string;
@@ -44,11 +55,11 @@ export const useKeycloakUserManagement = () => {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      const result = await safeParseJson(response);
       if (!response.ok) {
-        return { success: false, error: result.error || "Failed to create user" };
+        return { success: false, error: result?.error || "Failed to create user" };
       }
-      return { success: true, id: result.id };
+      return { success: true, id: result?.id };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
     }
@@ -62,9 +73,9 @@ export const useKeycloakUserManagement = () => {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      const result = await safeParseJson(response);
       if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update user" };
+        return { success: false, error: result?.error || "Failed to update user" };
       }
       return { success: true };
     } catch (err) {
@@ -80,11 +91,11 @@ export const useKeycloakUserManagement = () => {
         body: JSON.stringify({}),
       });
 
-      const result = await response.json();
+      const result = await safeParseJson(response);
       if (!response.ok) {
-        return { success: false, error: result.error || "Failed to toggle user" };
+        return { success: false, error: result?.error || "Failed to toggle user" };
       }
-      return { success: true, enabled: result.enabled };
+      return { success: true, enabled: result?.enabled };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
     }
