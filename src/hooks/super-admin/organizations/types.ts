@@ -1,16 +1,24 @@
 /**
  * Super Admin Organizations - Type Definitions
- * Provides types for organization management and aggregated metrics
+ * Updated for Keycloak Organizations API
  */
 
 export interface Organization {
-  id: number;
+  /** Keycloak Organization UUID */
+  id: string;
+  /** Webhook correlation ID (from Keycloak org attributes.client_id) */
   clientId: number;
   name: string;
+  /** Derived from Keycloak `enabled` field */
   status: "active" | "inactive";
+  /** Direct Keycloak field */
+  enabled: boolean;
+  description?: string;
+  alias?: string;
+  domains?: Array<{ name: string; verified: boolean }>;
   createdAt: Date;
   updatedAt: Date;
-  // Aggregated counts (computed per-org)
+  // Aggregated counts (computed per-org from webhook metrics)
   userCount: number;
   activeAlerts: number;
   hostsCount: number;
@@ -18,13 +26,13 @@ export interface Organization {
   insightsCount: number;
 }
 
+/** @deprecated Use KeycloakOrganization from hooks/keycloak instead */
 export interface OrganizationRaw {
   client_id: number;
   client_name: string;
   status?: string | number;
   created_at?: string;
   updated_at?: string;
-  // Optional pre-aggregated counts from backend
   user_count?: number;
   active_alerts?: number;
   hosts_count?: number;

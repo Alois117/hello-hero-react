@@ -5,6 +5,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { useKeycloakMembers, type KeycloakMember } from "@/hooks/keycloak";
 import {
   WEBHOOK_ALERTS_URL,
   WEBHOOK_ZABBIX_HOSTS_URL,
@@ -101,6 +102,8 @@ interface CategoryData<T> {
 
 interface UseOrganizationDetailsOptions {
   clientId: number | null;
+  /** Keycloak organization UUID for members API */
+  keycloakOrgId?: string | null;
   enabled?: boolean;
 }
 
@@ -240,8 +243,16 @@ const pickInsightTimestamp = (i: any): Date => {
 export const useOrganizationDetails = (
   options: UseOrganizationDetailsOptions
 ): UseOrganizationDetailsReturn => {
-  const { clientId, enabled = true } = options;
+  const { clientId, keycloakOrgId, enabled = true } = options;
   const { authenticatedFetch } = useAuthenticatedFetch();
+
+  // Use real Keycloak members instead of mock data
+  const {
+    members: keycloakMembers,
+    loading: membersLoading,
+    error: membersError,
+    refresh: refreshMembers,
+  } = useKeycloakMembers(keycloakOrgId ?? null);
 
   const [selectedCategory, setSelectedCategory] =
     useState<DrilldownCategory>(null);
@@ -611,22 +622,22 @@ export const useOrganizationDetails = (
     }
   }, [clientId, enabled, authenticatedFetch]);
 
-  // Fetch users (mock)
+  // Fetch users from Keycloak members (replaces mock data)
   const fetchUsers = useCallback(async () => {
-    if (!clientId || !enabled) return;
+    if (!enabled) return;
 
-    setUsers((prev) => ({ ...prev, loading: true, error: null }));
+    // Transform Keycloak members to UserItem format
+    const items: UserItem[] = keycloakMembers.map((m: KeycloakMember) => ({
+      id: m.id,
+      name: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || `User ${m.id.slice(0, 8)}`,
+      email: m.email || m.username || "",
+      role: "user", // Keycloak members API doesn't return org-specific roles directly
+      status: m.enabled ? "active" : "inactive",
+      lastLogin: m.createdTimestamp ? new Date(m.createdTimestamp) : undefined,
+    }));
 
-    setTimeout(() => {
-      const mockUsers: UserItem[] = [
-        { id: "1", name: "Admin User", email: "admin@org.com", role: "admin", status: "active" },
-        { id: "2", name: "Power User", email: "power@org.com", role: "user", status: "active" },
-        { id: "3", name: "Viewer", email: "viewer@org.com", role: "viewer", status: "inactive" },
-      ];
-
-      setUsers({ items: mockUsers, loading: false, error: null, lastFetched: new Date() });
-    }, 500);
-  }, [clientId, enabled]);
+    setUsers({ items, loading: false, error: membersError, lastFetched: new Date() });
+  }, [enabled, keycloakMembers, membersError]);
 
   const refreshCategory = useCallback(
     async (category: DrilldownCategory) => {
@@ -686,7 +697,7 @@ export const useOrganizationDetails = (
         if (shouldFetch(veeam)) fetchVeeam();
         break;
       case "users":
-        if (shouldFetch(users)) fetchUsers();
+      if (shouldFetch(users)) fetchUsers();
         break;
     }
   }, [selectedCategory, clientId, enabled]);

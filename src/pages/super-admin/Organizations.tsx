@@ -122,7 +122,7 @@ const Organizations = () => {
           loading={loading}
           error={error}
           onOrgClick={setSelectedOrg}
-          selectedOrgId={selectedOrg?.id}
+          selectedOrgId={selectedOrg?.id ?? null}
         />
 
         {/* Pagination */}

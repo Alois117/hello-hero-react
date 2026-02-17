@@ -13,7 +13,7 @@ interface OrganizationsListProps {
   loading: boolean;
   error: string | null;
   onOrgClick: (org: Organization) => void;
-  selectedOrgId?: number | null;
+  selectedOrgId?: string | null;
 }
 
 const OrganizationsList = ({

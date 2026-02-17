@@ -131,6 +131,7 @@ const OrganizationDetailView = ({
     refreshCategory,
   } = useOrganizationDetails({
     clientId: organization.clientId,
+    keycloakOrgId: organization.id,
     enabled: true,
   });
 

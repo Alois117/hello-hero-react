@@ -19,6 +19,10 @@ export const KEYCLOAK_USERINFO_URL =
 // ─── Backend / API ──────────────────────────────────────────────────────────
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/api";
 
+// ─── Keycloak Admin API (Deno handler for org/user management) ──────────────
+export const KEYCLOAK_ADMIN_API_URL =
+  import.meta.env.VITE_KEYCLOAK_ADMIN_API_URL || `${BACKEND_URL}/keycloak`;
+
 
 // ─── Webhook Base URL (optional convenience; each endpoint also has its own var) ─
 export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'http://localhost:5678';

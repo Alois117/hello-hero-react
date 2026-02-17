@@ -30,6 +30,6 @@
     "src"
   ],
   "exclude": [
-    "src/keycloak/update-profile"
+    "src/keycloak/admin-api"
   ]
 }
