@@ -29,6 +29,17 @@ interface UseKeycloakMembersReturn {
 
 const BASE = KEYCLOAK_ADMIN_API_URL;
 
+/** Safely parse JSON, returning null if content-type is not JSON */
+async function safeParseJson(response: Response): Promise<any> {
+  const ct = response.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    const text = await response.text();
+    console.error("[useKeycloakMembers] Non-JSON response:", text.substring(0, 200));
+    return null;
+  }
+  return response.json();
+}
+
 export const useKeycloakMembers = (
   orgId: string | null
 ): UseKeycloakMembersReturn => {
@@ -60,6 +71,14 @@ export const useKeycloakMembers = (
 
       if (!response.ok) {
         throw new Error(`Failed to fetch members (${response.status})`);
+      }
+
+      // Safe JSON parsing — guard against HTML error pages
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("[useKeycloakMembers] Non-JSON response:", text.substring(0, 200));
+        throw new Error("Backend returned non-JSON response. Check KEYCLOAK_ADMIN_API_URL configuration.");
       }
 
       const data = await response.json();
@@ -106,8 +125,8 @@ export const useKeycloakMembers = (
       );
 
       if (!response.ok) {
-        const result = await response.json();
-        return { success: false, error: result.error || "Failed to add member" };
+        const result = await safeParseJson(response);
+        return { success: false, error: result?.error || "Failed to add member" };
       }
 
       await fetchMembers(true);
@@ -127,8 +146,8 @@ export const useKeycloakMembers = (
       );
 
       if (!response.ok) {
-        const result = await response.json();
-        return { success: false, error: result.error || "Failed to remove member" };
+        const result = await safeParseJson(response);
+        return { success: false, error: result?.error || "Failed to remove member" };
       }
 
       await fetchMembers(true);

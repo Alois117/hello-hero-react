@@ -55,9 +55,6 @@ export const WEBHOOK_BACKUP_REPLICATION_URL =
 export const WEBHOOK_JARVIS_ASSISTANT_URL =
   import.meta.env.VITE_WEBHOOK_JARVIS_ASSISTANT_URL || `${WEBHOOK_BASE_URL}/webhook/Jarvis-AI-Assistant`;
 
-export const WEBHOOK_ORGANIZATIONS_URL =
-  import.meta.env.VITE_WEBHOOK_ORGANIZATIONS_URL || `${WEBHOOK_BASE_URL}/webhook/organizations`;
-
 // ─── System Logs (Keycloak Audit Events) ────────────────────────────────────
 /** User events (LOGIN, UPDATE_PROFILE, LOGIN_ERROR, etc.) */
 export const KEYCLOAK_EVENTS_URL =

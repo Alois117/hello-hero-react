@@ -1,13 +1,15 @@
 /**
  * Super Admin Organizations Page
  * Displays all tenant organizations with real data from webhooks
- * Uses same data patterns as user dashboard for consistency
+ * Includes Create/Edit/Toggle organization management via Keycloak
  */
+import { useState } from "react";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
 import { 
   useOrganizations, 
   useOrganizationMetrics 
 } from "@/hooks/super-admin/organizations";
+import { useKeycloakOrganizations, type KeycloakOrganization } from "@/hooks/keycloak/useKeycloakOrganizations";
 import {
   OrganizationsSummaryCards,
   OrganizationsFilters,
@@ -16,9 +18,15 @@ import {
   OrganizationsPagination,
   OrganizationDetailView,
 } from "@/components/super-admin/organizations";
+import {
+  CreateOrganizationDialog,
+  EditOrganizationDialog,
+  ToggleOrganizationDialog,
+} from "@/components/super-admin/organizations/OrganizationManagementDialogs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const Organizations = () => {
   const {
@@ -42,6 +50,21 @@ const Organizations = () => {
     setSelectedOrg,
   } = useOrganizations(10);
 
+  // Keycloak org management actions
+  const {
+    createOrganization,
+    updateOrganization,
+    toggleOrganization,
+    refresh: refreshKeycloakOrgs,
+  } = useKeycloakOrganizations();
+
+  const { toast } = useToast();
+
+  // Dialog state
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingOrg, setEditingOrg] = useState<KeycloakOrganization | null>(null);
+  const [togglingOrg, setTogglingOrg] = useState<KeycloakOrganization | null>(null);
+
   // Fetch detailed metrics when an org is selected
   const {
     metrics: orgMetrics,
@@ -53,12 +76,44 @@ const Organizations = () => {
     enabled: selectedOrg !== null,
   });
 
+  const handleCreate = async (data: any) => {
+    const result = await createOrganization(data);
+    if (result.success) {
+      toast({ title: "Organization created successfully" });
+      refreshKeycloakOrgs();
+    } else {
+      toast({ title: "Failed to create organization", description: result.error, variant: "destructive" });
+    }
+    return result;
+  };
+
+  const handleUpdate = async (id: string, data: any) => {
+    const result = await updateOrganization(id, data);
+    if (result.success) {
+      toast({ title: "Organization updated successfully" });
+      refreshKeycloakOrgs();
+    } else {
+      toast({ title: "Failed to update organization", description: result.error, variant: "destructive" });
+    }
+    return result;
+  };
+
+  const handleToggle = async (org: KeycloakOrganization) => {
+    const result = await toggleOrganization(org);
+    if (result.success) {
+      toast({ title: `Organization ${org.enabled ? "disabled" : "enabled"} successfully` });
+      refreshKeycloakOrgs();
+    } else {
+      toast({ title: "Failed to toggle organization", description: result.error, variant: "destructive" });
+    }
+    return result;
+  };
+
   // If an organization is selected, show detail view
   if (selectedOrg) {
     return (
       <SuperAdminLayout>
         <div className="space-y-6 animate-fade-in">
-          {/* Back Button */}
           <Button 
             variant="ghost" 
             onClick={() => setSelectedOrg(null)}
@@ -81,7 +136,6 @@ const Organizations = () => {
     );
   }
 
-  // Main organizations list view
   return (
     <SuperAdminLayout>
       <div className="space-y-6 animate-fade-in">
@@ -95,17 +149,21 @@ const Organizations = () => {
               Manage all tenant organizations
             </p>
           </div>
-          <OrganizationsConnectionStatus
-            isConnected={isConnected}
-            lastUpdated={lastUpdated}
-            loading={loading}
-          />
+          <div className="flex items-center gap-3">
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Create Organization
+            </Button>
+            <OrganizationsConnectionStatus
+              isConnected={isConnected}
+              lastUpdated={lastUpdated}
+              loading={loading}
+            />
+          </div>
         </div>
 
-        {/* Summary Cards */}
         <OrganizationsSummaryCards counts={counts} />
 
-        {/* Filters */}
         <Card className="p-4 border-border/50">
           <OrganizationsFilters
             filters={filters}
@@ -116,7 +174,6 @@ const Organizations = () => {
           />
         </Card>
 
-        {/* Organizations List */}
         <OrganizationsList
           organizations={paginatedOrganizations}
           loading={loading}
@@ -125,7 +182,6 @@ const Organizations = () => {
           selectedOrgId={selectedOrg?.id ?? null}
         />
 
-        {/* Pagination */}
         <OrganizationsPagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -134,6 +190,23 @@ const Organizations = () => {
           onPageChange={setCurrentPage}
         />
       </div>
+
+      {/* Management Dialogs */}
+      <CreateOrganizationDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onCreate={handleCreate}
+      />
+      <EditOrganizationDialog
+        org={editingOrg}
+        onOpenChange={() => setEditingOrg(null)}
+        onUpdate={handleUpdate}
+      />
+      <ToggleOrganizationDialog
+        org={togglingOrg}
+        onOpenChange={() => setTogglingOrg(null)}
+        onToggle={handleToggle}
+      />
     </SuperAdminLayout>
   );
 };

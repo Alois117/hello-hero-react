@@ -46,6 +46,17 @@ export interface UpdateOrgData {
 
 const BASE = KEYCLOAK_ADMIN_API_URL;
 
+/** Safely parse JSON, returning null if content-type is not JSON */
+async function safeParseJson(response: Response): Promise<any> {
+  const ct = response.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    const text = await response.text();
+    console.error("[useKeycloakOrganizations] Non-JSON response:", text.substring(0, 200));
+    return null;
+  }
+  return response.json();
+}
+
 export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
   const [organizations, setOrganizations] = useState<KeycloakOrganization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +82,14 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
 
       if (!response.ok) {
         throw new Error(`Failed to fetch organizations (${response.status})`);
+      }
+
+      // Safe JSON parsing — guard against HTML error pages
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("[useKeycloakOrganizations] Non-JSON response:", text.substring(0, 200));
+        throw new Error("Backend returned non-JSON response. Check KEYCLOAK_ADMIN_API_URL configuration.");
       }
 
       const data = await response.json();
@@ -114,13 +133,13 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      const result = await safeParseJson(response);
       if (!response.ok) {
-        return { success: false, error: result.error || "Failed to create organization" };
+        return { success: false, error: result?.error || "Failed to create organization" };
       }
 
       await fetchOrganizations(true);
-      return { success: true, id: result.id };
+      return { success: true, id: result?.id };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
     }
@@ -134,9 +153,9 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      const result = await safeParseJson(response);
       if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update organization" };
+        return { success: false, error: result?.error || "Failed to update organization" };
       }
 
       await fetchOrganizations(true);
@@ -157,8 +176,8 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
       });
 
       if (!response.ok) {
-        const result = await response.json();
-        return { success: false, error: result.error || "Failed to delete organization" };
+        const result = await safeParseJson(response);
+        return { success: false, error: result?.error || "Failed to delete organization" };
       }
 
       await fetchOrganizations(true);
