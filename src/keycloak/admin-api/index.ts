@@ -20,6 +20,7 @@
  *   KEYCLOAK_BASE_URL, KEYCLOAK_REALM,
  *   KEYCLOAK_ADMIN_CLIENT_ID, KEYCLOAK_ADMIN_CLIENT_SECRET
  */
+import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, json } from "./lib/helpers.ts";
 import { handleProfile } from "./handlers/profile.ts";

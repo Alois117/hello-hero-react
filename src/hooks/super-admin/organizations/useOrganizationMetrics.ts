@@ -1,10 +1,13 @@
 /**
  * Super Admin Organization Metrics Hook
- * Fetches per-organization detailed metrics by reusing existing webhook endpoints
- * with client_id filtering for organization-scoped data
+ * Fetches per-organization detailed metrics.
+ * Uses orgId (Keycloak UUID) as primary identifier.
+ * clientId is optional — used only for webhook data filtering.
+ * Member count is fetched from Keycloak members API.
  */
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuthenticatedFetch } from "@/keycloak/hooks/useAuthenticatedFetch";
+import { useKeycloakMembers } from "@/hooks/keycloak";
 import { OrganizationDetailMetrics } from "./types";
 import {
   WEBHOOK_ALERTS_URL,
@@ -13,8 +16,8 @@ import {
   WEBHOOK_AI_INSIGHTS_URL,
   WEBHOOK_BACKUP_REPLICATION_URL,
 } from "@/config/env";
+import { safeParseResponse } from "@/lib/safeFetch";
 
-// Reuse existing endpoint patterns from user dashboard hooks
 const ENDPOINTS = {
   alerts: WEBHOOK_ALERTS_URL,
   hosts: WEBHOOK_ZABBIX_HOSTS_URL,
@@ -23,10 +26,13 @@ const ENDPOINTS = {
   veeam: WEBHOOK_BACKUP_REPLICATION_URL,
 };
 
-const REFRESH_INTERVAL = 60000; // 1 minute for detail view
+const REFRESH_INTERVAL = 60000;
 
 interface UseOrganizationMetricsOptions {
-  clientId: number | null;
+  /** Keycloak organization UUID — required */
+  orgId: string | null;
+  /** Webhook correlation ID — optional, used for filtering webhook data */
+  clientId?: number | null;
   enabled?: boolean;
 }
 
@@ -48,12 +54,35 @@ const initialMetrics: OrganizationDetailMetrics = {
   veeam: { jobs: 0, success: 0, failed: 0, loading: true },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const toNumberOrNull = (v: any): number | null => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const normalizeClientId = (clientId?: number | null): number | null => {
+  const n = toNumberOrNull(clientId);
+  return n != null && n > 0 ? n : null;
+};
+
+const matchesClientId = (payloadClientId: any, clientId: number | null) => {
+  if (clientId == null) return true;
+  const n = toNumberOrNull(payloadClientId);
+  return n != null && n === clientId;
+};
+
 export const useOrganizationMetrics = (
   options: UseOrganizationMetricsOptions
 ): UseOrganizationMetricsReturn => {
-  const { clientId, enabled = true } = options;
+  const { orgId, enabled = true } = options;
+  const clientId = normalizeClientId(options.clientId);
+  const hasClientId = clientId != null;
 
-  const [metrics, setMetrics] = useState<OrganizationDetailMetrics>(initialMetrics);
+  const [metrics, setMetrics] =
+    useState<OrganizationDetailMetrics>(initialMetrics);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -64,198 +93,274 @@ export const useOrganizationMetrics = (
 
   const { authenticatedFetch } = useAuthenticatedFetch();
 
-  // Fetch all metrics concurrently with concurrency limiting
-  const fetchMetrics = useCallback(async (silent = false) => {
-    if (!clientId || !enabled) return;
+  // Fetch members count from Keycloak
+  const { members: keycloakMembers, loading: membersLoading } =
+    useKeycloakMembers(enabled && orgId ? orgId : null);
 
-    // Cancel any pending requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
+  const fetchMetrics = useCallback(
+    async (silent = false) => {
+      if (!orgId || !enabled) return;
 
-    if (!silent) setLoading(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
 
-    try {
-      // Fetch metrics in parallel with Promise.allSettled for resilience
-      const [alertsRes, hostsRes, reportsRes, insightsRes, veeamRes] = await Promise.allSettled([
-        // Alerts - filter by client_id from response
-        authenticatedFetch(ENDPOINTS.alerts, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId }),
-        }),
-        // Hosts - filter by client_id
-        authenticatedFetch(ENDPOINTS.hosts, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId }),
-        }),
-        // Reports
-        authenticatedFetch(ENDPOINTS.reports, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId }),
-        }),
-        // AI Insights
-        authenticatedFetch(ENDPOINTS.insights, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId }),
-        }),
-        // Veeam (POST endpoint)
-        authenticatedFetch(ENDPOINTS.veeam, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }),
-      ]);
+      if (!silent) setLoading(true);
 
-      // Process alerts
-      let alertsMetrics = { total: 0, active: 0, critical: 0, loading: false };
-      if (alertsRes.status === "fulfilled" && alertsRes.value.ok) {
-        try {
-          const data = await alertsRes.value.json();
-          const alerts = Array.isArray(data) ? data : [];
-          // Filter by client_id if the backend doesn't filter
-          const orgAlerts = alerts.filter((a: any) => a.client_id === clientId);
-          alertsMetrics = {
-            total: orgAlerts.length,
-            active: orgAlerts.filter((a: any) => 
-              !a.acknowledged && a.status !== "resolved"
-            ).length,
-            critical: orgAlerts.filter((a: any) => 
-              a.severity === "critical" || a.severity === "disaster"
-            ).length,
-            loading: false,
-          };
-        } catch { /* parsing error */ }
+      // If no clientId, webhook metrics won't be filterable — set them to 0 with loading=false
+      if (!hasClientId) {
+        setMetrics({
+          users: { total: keycloakMembers.length, loading: membersLoading },
+          alerts: { total: 0, active: 0, critical: 0, loading: false },
+          hosts: { total: 0, enabled: 0, disabled: 0, loading: false },
+          reports: { total: 0, daily: 0, weekly: 0, monthly: 0, loading: false },
+          insights: { total: 0, predictions: 0, anomalies: 0, loading: false },
+          veeam: { jobs: 0, success: 0, failed: 0, loading: false },
+        });
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+        if (!silent) setLoading(false);
+        return;
       }
 
-      // Process hosts
-      let hostsMetrics = { total: 0, enabled: 0, disabled: 0, loading: false };
-      if (hostsRes.status === "fulfilled" && hostsRes.value.ok) {
-        try {
-          const data = await hostsRes.value.json();
-          const hosts = Array.isArray(data) ? data : [];
-          const orgHosts = hosts.filter((h: any) => h.client_id === clientId);
-          hostsMetrics = {
-            total: orgHosts.length,
-            enabled: orgHosts.filter((h: any) => h.status === 0).length,
-            disabled: orgHosts.filter((h: any) => h.status !== 0).length,
-            loading: false,
-          };
-        } catch { /* parsing error */ }
+      try {
+        const commonPost = {
+          method: "POST" as const,
+          headers: { "Content-Type": "application/json" },
+          // NOTE: signal is available if your authenticatedFetch forwards it; harmless otherwise
+          signal: abortControllerRef.current.signal,
+        };
+
+        const fetchPromises = [
+          authenticatedFetch(ENDPOINTS.alerts, {
+            ...commonPost,
+            body: JSON.stringify({ client_id: clientId }),
+          }).catch(() => null),
+
+          authenticatedFetch(ENDPOINTS.hosts, {
+            ...commonPost,
+            body: JSON.stringify({ client_id: clientId }),
+          }).catch(() => null),
+
+          authenticatedFetch(ENDPOINTS.reports, {
+            ...commonPost,
+            body: JSON.stringify({ client_id: clientId }),
+          }).catch(() => null),
+
+          authenticatedFetch(ENDPOINTS.insights, {
+            ...commonPost,
+            body: JSON.stringify({ client_id: clientId }),
+          }).catch(() => null),
+
+          // ✅ FIX 1: scope the Veeam webhook request by client_id
+          authenticatedFetch(ENDPOINTS.veeam, {
+            ...commonPost,
+            body: JSON.stringify({ client_id: clientId }),
+          }).catch(() => null),
+        ];
+
+        const results = await Promise.all(fetchPromises);
+
+        // ── Alerts ────────────────────────────────────────────────────────────
+        let alertsMetrics = { total: 0, active: 0, critical: 0, loading: false };
+        if (results[0] && results[0].ok) {
+          const parsed = await safeParseResponse<any[]>(results[0]);
+          if (parsed.ok && Array.isArray(parsed.data)) {
+            const orgAlerts = parsed.data.filter((a: any) =>
+              matchesClientId(a?.client_id ?? a?.clientId, clientId)
+            );
+            alertsMetrics = {
+              total: orgAlerts.length,
+              active: orgAlerts.filter(
+                (a: any) => !a.acknowledged && a.status !== "resolved"
+              ).length,
+              critical: orgAlerts.filter((a: any) => {
+                const sev = String(a?.severity ?? "").toLowerCase();
+                return sev === "critical" || sev === "disaster";
+              }).length,
+              loading: false,
+            };
+          }
+        }
+
+        // ── Hosts ─────────────────────────────────────────────────────────────
+        let hostsMetrics = { total: 0, enabled: 0, disabled: 0, loading: false };
+        if (results[1] && results[1].ok) {
+          const parsed = await safeParseResponse<any[]>(results[1]);
+          if (parsed.ok && Array.isArray(parsed.data)) {
+            const orgHosts = parsed.data.filter((h: any) =>
+              matchesClientId(h?.client_id ?? h?.clientId, clientId)
+            );
+            hostsMetrics = {
+              total: orgHosts.length,
+              enabled: orgHosts.filter((h: any) => h.status === 0).length,
+              disabled: orgHosts.filter((h: any) => h.status !== 0).length,
+              loading: false,
+            };
+          }
+        }
+
+        // ── Reports ───────────────────────────────────────────────────────────
+        let reportsMetrics = {
+          total: 0,
+          daily: 0,
+          weekly: 0,
+          monthly: 0,
+          loading: false,
+        };
+        if (results[2] && results[2].ok) {
+          const parsed = await safeParseResponse<any[]>(results[2]);
+          if (parsed.ok && Array.isArray(parsed.data)) {
+            const reports = parsed.data;
+
+            // If payload contains client_id anywhere, filter by it; otherwise assume backend already scoped.
+            const hasAnyClientId = reports.some(
+              (r: any) => r?.client_id != null || r?.clientId != null
+            );
+
+            const orgReports = hasAnyClientId
+              ? reports.filter((r: any) =>
+                  matchesClientId(r?.client_id ?? r?.clientId, clientId)
+                )
+              : reports;
+
+            const typeOf = (r: any) =>
+              String(r?.report_type ?? r?.type ?? "").toLowerCase();
+
+            reportsMetrics = {
+              total: orgReports.length,
+              daily: orgReports.filter((r: any) => typeOf(r) === "daily").length,
+              weekly: orgReports.filter((r: any) => typeOf(r) === "weekly").length,
+              monthly: orgReports.filter((r: any) => typeOf(r) === "monthly").length,
+              loading: false,
+            };
+          }
+        }
+
+        // ── Insights ──────────────────────────────────────────────────────────
+        let insightsMetrics = {
+          total: 0,
+          predictions: 0,
+          anomalies: 0,
+          loading: false,
+        };
+        if (results[3] && results[3].ok) {
+          const parsed = await safeParseResponse<any[]>(results[3]);
+          if (parsed.ok && Array.isArray(parsed.data)) {
+            const orgInsights = parsed.data.filter((i: any) =>
+              matchesClientId(i?.client_id ?? i?.clientId, clientId)
+            );
+            const typeOf = (i: any) =>
+              String(
+                i?.type ?? i?.insight_type ?? i?.category ?? ""
+              ).toLowerCase();
+
+            insightsMetrics = {
+              total: orgInsights.length,
+              predictions: orgInsights.filter((i: any) =>
+                typeOf(i).includes("predict")
+              ).length,
+              anomalies: orgInsights.filter((i: any) =>
+                typeOf(i).includes("anomal")
+              ).length,
+              loading: false,
+            };
+          }
+        }
+
+        // ── Veeam ─────────────────────────────────────────────────────────────
+        // Response format: [mainObj, metaObj] — same as User Dashboard
+        let veeamMetrics = { jobs: 0, success: 0, failed: 0, loading: false };
+        if (results[4] && results[4].ok) {
+          const parsed = await safeParseResponse<any[]>(results[4]);
+          if (parsed.ok && Array.isArray(parsed.data)) {
+            const mainObj = (parsed.data[0] ?? {}) as Record<string, any>;
+            const matched = Array.isArray(mainObj.matched) ? mainObj.matched : [];
+            const brSummary = mainObj.summary;
+
+            // Use summary if available, otherwise compute from matched
+            const totalJobs = brSummary?.overview?.totalJobs
+              ?? matched.reduce((acc: number, m: any) => acc + (m.jobs?.length ?? 0), 0);
+
+            const statusOf = (m: any) =>
+              String(m?.protectionSummary?.overallStatus ?? "").toLowerCase();
+
+            veeamMetrics = {
+              jobs: totalJobs,
+              success: brSummary?.backupHealth?.successfulJobs
+                ?? matched.filter((m: any) => statusOf(m).includes("success")).length,
+              failed: brSummary?.backupHealth?.failedJobs
+                ?? matched.filter((m: any) => {
+                  const s = statusOf(m);
+                  return s.includes("fail") || s.includes("error");
+                }).length,
+              loading: false,
+            };
+          }
+        }
+
+        setMetrics({
+          users: { total: keycloakMembers.length, loading: membersLoading },
+          alerts: alertsMetrics,
+          hosts: hostsMetrics,
+          reports: reportsMetrics,
+          insights: insightsMetrics,
+          veeam: veeamMetrics,
+        });
+
+        setIsConnected(true);
+        setLastUpdated(new Date());
+        setError(null);
+      } catch (err) {
+        console.error("[useOrganizationMetrics] Failed to fetch metrics:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch metrics");
+        setIsConnected(false);
+      } finally {
+        if (!silent) setLoading(false);
       }
+    },
+    [
+      orgId,
+      enabled,
+      hasClientId,
+      clientId,
+      authenticatedFetch,
+      keycloakMembers,
+      membersLoading,
+    ]
+  );
 
-      // Process reports
-      let reportsMetrics = { total: 0, daily: 0, weekly: 0, monthly: 0, loading: false };
-      if (reportsRes.status === "fulfilled" && reportsRes.value.ok) {
-        try {
-          const data = await reportsRes.value.json();
-          const reports = Array.isArray(data) ? data : [];
-          // Reports may not have client_id, count all if super admin
-          reportsMetrics = {
-            total: reports.length,
-            daily: reports.filter((r: any) => r.report_type === "daily").length,
-            weekly: reports.filter((r: any) => r.report_type === "weekly").length,
-            monthly: reports.filter((r: any) => r.report_type === "monthly").length,
-            loading: false,
-          };
-        } catch { /* parsing error */ }
-      }
-
-      // Process insights
-      let insightsMetrics = { total: 0, predictions: 0, anomalies: 0, loading: false };
-      if (insightsRes.status === "fulfilled" && insightsRes.value.ok) {
-        try {
-          const data = await insightsRes.value.json();
-          const insights = Array.isArray(data) ? data : [];
-          const orgInsights = insights.filter((i: any) => i.client_id === clientId);
-          insightsMetrics = {
-            total: orgInsights.length,
-            predictions: orgInsights.filter((i: any) => 
-              i.type?.toLowerCase().includes("predict")
-            ).length,
-            anomalies: orgInsights.filter((i: any) => 
-              i.type?.toLowerCase().includes("anomal")
-            ).length,
-            loading: false,
-          };
-        } catch { /* parsing error */ }
-      }
-
-      // Process Veeam jobs
-      let veeamMetrics = { jobs: 0, success: 0, failed: 0, loading: false };
-      if (veeamRes.status === "fulfilled" && veeamRes.value.ok) {
-        try {
-          const data = await veeamRes.value.json();
-          const jobs = Array.isArray(data) ? data : [];
-          // Veeam jobs might have client_id or be global
-          veeamMetrics = {
-            jobs: jobs.length,
-            success: jobs.filter((j: any) => 
-              j.severity?.toLowerCase() === "success"
-            ).length,
-            failed: jobs.filter((j: any) => 
-              j.severity?.toLowerCase() === "failed" || j.severity?.toLowerCase() === "error"
-            ).length,
-            loading: false,
-          };
-        } catch { /* parsing error */ }
-      }
-
-      setMetrics({
-        users: { total: 0, loading: false }, // Users would need a separate endpoint
-        alerts: alertsMetrics,
-        hosts: hostsMetrics,
-        reports: reportsMetrics,
-        insights: insightsMetrics,
-        veeam: veeamMetrics,
-      });
-
-      setIsConnected(true);
-      setLastUpdated(new Date());
-      setError(null);
-    } catch (err) {
-      console.error("Failed to fetch organization metrics");
-      setError(err instanceof Error ? err.message : "Failed to fetch metrics");
-      setIsConnected(false);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [clientId, enabled, authenticatedFetch]);
-
-  // Fetch when clientId changes
   useEffect(() => {
-    if (clientId && enabled) {
+    if (orgId && enabled) {
       setMetrics(initialMetrics);
       fetchMetrics(false);
     }
-  }, [clientId, enabled, fetchMetrics]);
+  }, [orgId, enabled, fetchMetrics]);
 
-  // Silent auto-refresh when viewing detail
   useEffect(() => {
-    if (!clientId || !enabled) return;
-
+    if (!orgId || !enabled) return;
     intervalRef.current = setInterval(() => fetchMetrics(true), REFRESH_INTERVAL);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
-  }, [clientId, enabled, fetchMetrics]);
+  }, [orgId, enabled, fetchMetrics]);
+
+  // Update user count when members load
+  useEffect(() => {
+    setMetrics((prev) => ({
+      ...prev,
+      users: { total: keycloakMembers.length, loading: membersLoading },
+    }));
+  }, [keycloakMembers, membersLoading]);
 
   const refresh = useCallback(async () => {
     await fetchMetrics(false);
   }, [fetchMetrics]);
 
-  return {
-    metrics,
-    loading,
-    error,
-    isConnected,
-    lastUpdated,
-    refresh,
-  };
+  return { metrics, loading, error, isConnected, lastUpdated, refresh };
 };
 
 export default useOrganizationMetrics;

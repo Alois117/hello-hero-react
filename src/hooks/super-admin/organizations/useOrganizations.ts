@@ -47,31 +47,45 @@ export interface UseOrganizationsReturn {
   setSelectedOrg: (org: Organization | null) => void;
   // Keycloak org management actions
   keycloakActions: {
-    createOrganization: (data: any) => Promise<{ success: boolean; id?: string; error?: string }>;
-    updateOrganization: (id: string, data: any) => Promise<{ success: boolean; error?: string }>;
-    toggleOrganization: (org: KeycloakOrganization) => Promise<{ success: boolean; error?: string }>;
-    deleteOrganization: (id: string) => Promise<{ success: boolean; error?: string }>;
+    createOrganization: (
+      data: any
+    ) => Promise<{ success: boolean; id?: string; error?: string }>;
+    updateOrganization: (
+      id: string,
+      data: any
+    ) => Promise<{ success: boolean; error?: string }>;
+    toggleOrganization: (
+      org: KeycloakOrganization
+    ) => Promise<{ success: boolean; error?: string }>;
+    deleteOrganization: (
+      id: string
+    ) => Promise<{ success: boolean; error?: string }>;
   };
 }
 
 /**
  * Transform a Keycloak organization into the internal Organization type.
  * The client_id attribute (if set) is used for webhook metric correlation.
+ *
+ * ✅ Minimal-risk approach:
+ * - Derive clientId ONCE here
+ * - Super Admin uses org.clientId (never reads org.attributes directly)
  */
 const transformKeycloakOrg = (kc: KeycloakOrganization): Organization => {
-  // Extract client_id from attributes for webhook correlation
-  const clientIdAttr = kc.attributes?.client_id?.[0];
-  const clientId = clientIdAttr ? parseInt(clientIdAttr, 10) : 0;
+  // attributes.client_id is stored as string[] in Keycloak org representation
+  const clientIdRaw = kc.attributes?.client_id?.[0] ?? "0";
+  const clientId = Number(clientIdRaw) || 0;
 
   return {
     id: kc.id,
-    clientId: isNaN(clientId) ? 0 : clientId,
+    clientId,
     name: kc.name || "Unnamed Organization",
     status: kc.enabled ? "active" : "inactive",
     enabled: kc.enabled,
     description: kc.description,
     alias: kc.alias,
     domains: kc.domains,
+    // Keycloak org API does not provide timestamps; keep placeholders
     createdAt: new Date(),
     updatedAt: new Date(),
     // Counts default to 0; populated by useOrganizationMetrics when viewing details
@@ -201,10 +215,7 @@ export const useOrganizations = (pageSize = 10): UseOrganizationsReturn => {
   }, [filteredOrganizations, sortField, sortDirection]);
 
   // Pagination
-  const totalPages = Math.max(
-    1,
-    Math.ceil(sortedOrganizations.length / pageSize)
-  );
+  const totalPages = Math.max(1, Math.ceil(sortedOrganizations.length / pageSize));
 
   const paginatedOrganizations = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
@@ -228,23 +239,17 @@ export const useOrganizations = (pageSize = 10): UseOrganizationsReturn => {
     []
   );
 
-  const setHasActiveAlertsFilter = useCallback(
-    (value: boolean | null) => {
-      setFilters((prev) => ({ ...prev, hasActiveAlerts: value }));
-    },
-    []
-  );
+  const setHasActiveAlertsFilter = useCallback((value: boolean | null) => {
+    setFilters((prev) => ({ ...prev, hasActiveAlerts: value }));
+  }, []);
 
-  const setCreatedDateRange = useCallback(
-    (from: Date | null, to: Date | null) => {
-      setFilters((prev) => ({
-        ...prev,
-        createdDateFrom: from,
-        createdDateTo: to,
-      }));
-    },
-    []
-  );
+  const setCreatedDateRange = useCallback((from: Date | null, to: Date | null) => {
+    setFilters((prev) => ({
+      ...prev,
+      createdDateFrom: from,
+      createdDateTo: to,
+    }));
+  }, []);
 
   const clearFilters = useCallback(() => {
     setFilters({

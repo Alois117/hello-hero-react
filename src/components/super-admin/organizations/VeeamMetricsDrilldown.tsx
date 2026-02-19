@@ -167,8 +167,19 @@ function backupCurrentBadge(bc?: boolean) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps) => {
-  const hook = useOrganizationVeeamMetrics({ clientId, enabled: true });
+  // ✅ Only enable hook when clientId is valid (> 0)
+  const enabled = Number.isFinite(clientId) && clientId > 0;
+  const hook = useOrganizationVeeamMetrics({ clientId, enabled });
+
   const [activeTab, setActiveTab] = useState("backup");
+
+  if (!enabled) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        Veeam metrics require a valid <span className="font-mono">client_id</span>.
+      </div>
+    );
+  }
 
   if (hook.loading && !hook.brData && hook.infraVMs.length === 0) {
     return (
@@ -246,7 +257,12 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
         />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <MiniStat label="Stale Backups" value={s.staleBackups} icon={Clock} variant={s.staleBackups > 0 ? "warning" : "default"} />
+        <MiniStat
+          label="Stale Backups"
+          value={s.staleBackups}
+          icon={Clock}
+          variant={s.staleBackups > 0 ? "warning" : "default"}
+        />
         <MiniStat label="Infra VMs" value={s.infraVMs} icon={Monitor} />
         <MiniStat label="Infra Powered On" value={s.infraPoweredOn} icon={Monitor} variant="success" />
       </div>
@@ -268,17 +284,17 @@ const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps
           </TabsTrigger>
         </TabsList>
 
-        {/* ── Backup & Replication Tab ── */}
+        {/* Backup & Replication Tab */}
         <TabsContent value="backup" className="mt-4 space-y-4">
           <BackupReplicationTab hook={hook} />
         </TabsContent>
 
-        {/* ── Infrastructure Tab ── */}
+        {/* Infrastructure Tab */}
         <TabsContent value="infrastructure" className="mt-4 space-y-4">
           <InfrastructureTab hook={hook} />
         </TabsContent>
 
-        {/* ── Alarms Tab ── */}
+        {/* Alarms Tab */}
         <TabsContent value="alarms" className="mt-4 space-y-4">
           <AlarmsTab hook={hook} />
         </TabsContent>

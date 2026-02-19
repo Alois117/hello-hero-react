@@ -72,6 +72,7 @@ const Organizations = () => {
     lastUpdated: metricsLastUpdated,
     refresh: refreshMetrics,
   } = useOrganizationMetrics({
+    orgId: selectedOrg?.id ?? null,
     clientId: selectedOrg?.clientId ?? null,
     enabled: selectedOrg !== null,
   });
@@ -150,15 +151,15 @@ const Organizations = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Create Organization
-            </Button>
             <OrganizationsConnectionStatus
               isConnected={isConnected}
               lastUpdated={lastUpdated}
               loading={loading}
             />
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Create Organization
+            </Button>
           </div>
         </div>
 

@@ -11,7 +11,6 @@ import {
   WEBHOOK_ZABBIX_HOSTS_URL,
   WEBHOOK_REPORTS_URL,
   WEBHOOK_AI_INSIGHTS_URL,
-  WEBHOOK_BACKUP_REPLICATION_URL,
 } from "@/config/env";
 
 // Reuse existing endpoint patterns
@@ -20,7 +19,6 @@ const ENDPOINTS = {
   hosts: WEBHOOK_ZABBIX_HOSTS_URL,
   reports: WEBHOOK_REPORTS_URL,
   insights: WEBHOOK_AI_INSIGHTS_URL,
-  veeam: WEBHOOK_BACKUP_REPLICATION_URL,
 };
 
 export type DrilldownCategory =
@@ -101,9 +99,10 @@ interface CategoryData<T> {
 }
 
 interface UseOrganizationDetailsOptions {
-  clientId: number | null;
-  /** Keycloak organization UUID for members API */
-  keycloakOrgId?: string | null;
+  /** Keycloak organization UUID — primary identifier */
+  orgId: string | null;
+  /** Webhook correlation ID — optional, for filtering webhook data */
+  clientId?: number | null;
   enabled?: boolean;
 }
 
@@ -126,7 +125,10 @@ const initialCategoryData = <T,>(): CategoryData<T> => ({
   lastFetched: null,
 });
 
-// --- helpers (alerts mapping) ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 const normalizeSeverity = (value: any): string => {
   const s = String(value ?? "").trim();
   if (!s) return "info";
@@ -183,14 +185,19 @@ const extractHtmlTitle = (htmlRaw: unknown): string | null => {
   return null;
 };
 
-// --- helpers (insights mapping) ---
 const toNumberOrNull = (v: any): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
 
+const normalizeClientId = (clientId?: number | null): number | null => {
+  const n = toNumberOrNull(clientId);
+  return n != null && n > 0 ? n : null;
+};
+
 const getClientIdFromAny = (obj: any): number | null => {
   if (!obj) return null;
+
   // direct
   const direct = toNumberOrNull(obj.client_id ?? obj.clientId);
   if (direct != null) return direct;
@@ -240,10 +247,24 @@ const pickInsightTimestamp = (i: any): Date => {
   );
 };
 
+// Helper: compare client ids safely (string/number)
+const matchesClientId = (payloadClientId: any, clientId: number | null) => {
+  if (clientId == null) return true; // if no clientId, treat as unscoped
+  const n = toNumberOrNull(payloadClientId);
+  return n != null && n === clientId;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const useOrganizationDetails = (
   options: UseOrganizationDetailsOptions
 ): UseOrganizationDetailsReturn => {
-  const { clientId, keycloakOrgId, enabled = true } = options;
+  const { orgId, enabled = true } = options;
+  const clientId = normalizeClientId(options.clientId);
+  const hasClientId = clientId != null;
+
   const { authenticatedFetch } = useAuthenticatedFetch();
 
   // Use real Keycloak members instead of mock data
@@ -252,7 +273,7 @@ export const useOrganizationDetails = (
     loading: membersLoading,
     error: membersError,
     refresh: refreshMembers,
-  } = useKeycloakMembers(keycloakOrgId ?? null);
+  } = useKeycloakMembers(orgId);
 
   const [selectedCategory, setSelectedCategory] =
     useState<DrilldownCategory>(null);
@@ -274,7 +295,13 @@ export const useOrganizationDetails = (
 
   // ✅ Fetch alerts details (fixed mapping for /webhook/ai/insights)
   const fetchAlerts = useCallback(async () => {
-    if (!clientId || !enabled) return;
+    if (!orgId || !enabled) return;
+
+    // If no clientId, don't call webhook endpoint
+    if (!hasClientId) {
+      setAlerts({ items: [], loading: false, error: null, lastFetched: new Date() });
+      return;
+    }
 
     setAlerts((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -289,7 +316,11 @@ export const useOrganizationDetails = (
 
       const data = await response.json();
       const rawAlerts = Array.isArray(data) ? data : [];
-      const orgAlerts = rawAlerts.filter((a: any) => a?.client_id === clientId);
+
+      // Normalize filtering: string/number safe
+      const orgAlerts = rawAlerts.filter((a: any) =>
+        matchesClientId(a?.client_id ?? a?.clientId, clientId)
+      );
 
       const items: AlertItem[] = orgAlerts.map((a: any) => {
         const zbx = a?.zbx_raw ?? {};
@@ -337,7 +368,6 @@ export const useOrganizationDetails = (
           id: eventId,
           eventid: String(zbx?.eventid ?? rawEvent?.eventid ?? a?.eventid ?? ""),
           title,
-          // keep raw AI response searchable (but UI only displays title + host)
           message: (
             a?.first_ai_response ??
             a?.response_content ??
@@ -345,7 +375,6 @@ export const useOrganizationDetails = (
             ""
           ).toString(),
           severity,
-          // No explicit "resolved" field in sample; default to active unless user has ack logic
           status: a?.acknowledged ? "acknowledged" : a?.status ?? "active",
           host: hostFromAi,
           timestamp: ts,
@@ -366,11 +395,16 @@ export const useOrganizationDetails = (
         error: err instanceof Error ? err.message : "Failed to fetch alerts",
       }));
     }
-  }, [clientId, enabled, authenticatedFetch]);
+  }, [orgId, enabled, hasClientId, clientId, authenticatedFetch]);
 
   // ✅ Fetch hosts details (FIXED: map from groups_json)
   const fetchHosts = useCallback(async () => {
-    if (!clientId || !enabled) return;
+    if (!orgId || !enabled) return;
+
+    if (!hasClientId) {
+      setHosts({ items: [], loading: false, error: null, lastFetched: new Date() });
+      return;
+    }
 
     setHosts((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -385,7 +419,10 @@ export const useOrganizationDetails = (
 
       const data = await response.json();
       const rawHosts = Array.isArray(data) ? data : [];
-      const orgHosts = rawHosts.filter((h: any) => h?.client_id === clientId);
+
+      const orgHosts = rawHosts.filter((h: any) =>
+        matchesClientId(h?.client_id ?? h?.clientId, clientId)
+      );
 
       const items: HostItem[] = orgHosts.map((h: any, idx: number) => {
         const gj = h?.groups_json || {};
@@ -426,11 +463,16 @@ export const useOrganizationDetails = (
         error: err instanceof Error ? err.message : "Failed to fetch hosts",
       }));
     }
-  }, [clientId, enabled, authenticatedFetch]);
+  }, [orgId, enabled, hasClientId, clientId, authenticatedFetch]);
 
-  // Fetch reports details (already fixed)
+  // Fetch reports details (already fixed + normalize filter)
   const fetchReports = useCallback(async () => {
-    if (!clientId || !enabled) return;
+    if (!orgId || !enabled) return;
+
+    if (!hasClientId) {
+      setReports({ items: [], loading: false, error: null, lastFetched: new Date() });
+      return;
+    }
 
     setReports((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -446,8 +488,15 @@ export const useOrganizationDetails = (
       const data = await response.json();
       const rawReports = Array.isArray(data) ? data : [];
 
-      const orgReports = rawReports.some((r: any) => r?.client_id != null)
-        ? rawReports.filter((r: any) => r.client_id === clientId)
+      // If any report has client_id, filter by it (string/number safe). Otherwise assume backend already scoped.
+      const hasAnyClientId = rawReports.some(
+        (r: any) => r?.client_id != null || r?.clientId != null
+      );
+
+      const orgReports = hasAnyClientId
+        ? rawReports.filter((r: any) =>
+            matchesClientId(r?.client_id ?? r?.clientId, clientId)
+          )
         : rawReports;
 
       const items: ReportItem[] = orgReports.map((r: any, idx: number) => {
@@ -466,7 +515,9 @@ export const useOrganizationDetails = (
           try {
             const parsed = JSON.parse(template);
             if (typeof parsed === "string") template = parsed;
-          } catch { /* not JSON-encoded, use as-is */ }
+          } catch {
+            /* not JSON-encoded, use as-is */
+          }
           template = template
             .replace(/\\n/g, "\n")
             .replace(/\\r/g, "\r")
@@ -485,11 +536,16 @@ export const useOrganizationDetails = (
           report_template: template || undefined,
           status: safeString(r.status) || "completed",
           created_at: createdAt,
-          client_id: r.client_id,
+          client_id: toNumberOrNull(r.client_id ?? r.clientId) ?? undefined,
         };
       });
 
-      setReports({ items, loading: false, error: null, lastFetched: new Date() });
+      setReports({
+        items,
+        loading: false,
+        error: null,
+        lastFetched: new Date(),
+      });
     } catch (err) {
       setReports((prev) => ({
         ...prev,
@@ -497,11 +553,16 @@ export const useOrganizationDetails = (
         error: err instanceof Error ? err.message : "Failed to fetch reports",
       }));
     }
-  }, [clientId, enabled, authenticatedFetch]);
+  }, [orgId, enabled, hasClientId, clientId, authenticatedFetch]);
 
   // ✅ Fetch insights details (UPDATED mapping for /webhook/agent-insights)
   const fetchInsights = useCallback(async () => {
-    if (!clientId || !enabled) return;
+    if (!orgId || !enabled) return;
+
+    if (!hasClientId) {
+      setInsights({ items: [], loading: false, error: null, lastFetched: new Date() });
+      return;
+    }
 
     setInsights((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -517,10 +578,10 @@ export const useOrganizationDetails = (
       const data = await response.json();
       const rawInsights = Array.isArray(data) ? data : [];
 
-      // More robust filtering: handles number/string + nested client id
+      // Robust filtering: handles number/string + nested client id.
+      // If payload has no client_id at all, allow it (backend might already scope).
       const orgInsights = rawInsights.filter((i: any) => {
         const cid = getClientIdFromAny(i);
-        // if payload has no client_id at all, allow it (backend might already scope)
         if (cid == null) return true;
         return cid === clientId;
       });
@@ -554,7 +615,9 @@ export const useOrganizationDetails = (
         const computedType = inferInsightType(rawType, `${title} ${summary}`);
 
         const ts = pickInsightTimestamp(i);
-        const severity = normalizeSeverity(i?.severity ?? i?.level ?? i?.priority ?? "");
+        const severity = normalizeSeverity(
+          i?.severity ?? i?.level ?? i?.priority ?? ""
+        );
 
         const id =
           safeString(i?.id).trim() ||
@@ -573,7 +636,12 @@ export const useOrganizationDetails = (
         };
       });
 
-      setInsights({ items, loading: false, error: null, lastFetched: new Date() });
+      setInsights({
+        items,
+        loading: false,
+        error: null,
+        lastFetched: new Date(),
+      });
     } catch (err) {
       setInsights((prev) => ({
         ...prev,
@@ -581,57 +649,27 @@ export const useOrganizationDetails = (
         error: err instanceof Error ? err.message : "Failed to fetch insights",
       }));
     }
-  }, [clientId, enabled, authenticatedFetch]);
+  }, [orgId, enabled, hasClientId, clientId, authenticatedFetch]);
 
-  // Fetch veeam jobs details
+  // Veeam drilldown is handled by useOrganizationVeeamMetrics — this is a no-op stub
+  // kept for interface compatibility (refreshCategory("veeam") calls still work)
   const fetchVeeam = useCallback(async () => {
-    if (!clientId || !enabled) return;
-
-    setVeeam((prev) => ({ ...prev, loading: true, error: null }));
-
-    try {
-      const response = await authenticatedFetch(ENDPOINTS.veeam, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawJobs = Array.isArray(data) ? data : [];
-
-        const items: VeeamJobItem[] = rawJobs.map((j: any) => ({
-          id: j.id || j.jobId || String(Math.random()),
-          name: j.name || j.jobName || "Unnamed Job",
-          type: j.type || j.jobType,
-          severity: j.severity || j.status || "unknown",
-          lastRun: j.lastRun ? new Date(j.lastRun) : undefined,
-          nextRun: j.nextRun ? new Date(j.nextRun) : undefined,
-          status: j.status,
-        }));
-
-        setVeeam({ items, loading: false, error: null, lastFetched: new Date() });
-      } else {
-        throw new Error("Failed to fetch Veeam jobs");
-      }
-    } catch (err) {
-      setVeeam((prev) => ({
-        ...prev,
-        loading: false,
-        error: err instanceof Error ? err.message : "Failed to fetch Veeam jobs",
-      }));
-    }
-  }, [clientId, enabled, authenticatedFetch]);
+    // Veeam data is loaded by VeeamMetricsDrilldown via useOrganizationVeeamMetrics
+    setVeeam({ items: [], loading: false, error: null, lastFetched: new Date() });
+  }, []);
 
   // Fetch users from Keycloak members (replaces mock data)
   const fetchUsers = useCallback(async () => {
     if (!enabled) return;
 
-    // Transform Keycloak members to UserItem format
     const items: UserItem[] = keycloakMembers.map((m: KeycloakMember) => ({
       id: m.id,
-      name: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || `User ${m.id.slice(0, 8)}`,
+      name:
+        [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+        m.username ||
+        `User ${m.id.slice(0, 8)}`,
       email: m.email || m.username || "",
-      role: "user", // Keycloak members API doesn't return org-specific roles directly
+      role: "user",
       status: m.enabled ? "active" : "inactive",
       lastLogin: m.createdTimestamp ? new Date(m.createdTimestamp) : undefined,
     }));
@@ -671,7 +709,7 @@ export const useOrganizationDetails = (
   );
 
   useEffect(() => {
-    if (!selectedCategory || !clientId || !enabled) return;
+    if (!selectedCategory || !orgId || !enabled) return;
 
     const shouldFetch = (data: CategoryData<any>) =>
       !data.lastFetched || data.items.length === 0;
@@ -697,10 +735,26 @@ export const useOrganizationDetails = (
         if (shouldFetch(veeam)) fetchVeeam();
         break;
       case "users":
-      if (shouldFetch(users)) fetchUsers();
+        if (shouldFetch(users)) fetchUsers();
         break;
     }
-  }, [selectedCategory, clientId, enabled]);
+  }, [
+    selectedCategory,
+    orgId,
+    enabled,
+    alerts,
+    hosts,
+    reports,
+    insights,
+    veeam,
+    users,
+    fetchAlerts,
+    fetchHosts,
+    fetchReports,
+    fetchInsights,
+    fetchVeeam,
+    fetchUsers,
+  ]);
 
   useEffect(() => {
     setAlerts(initialCategoryData());
@@ -709,7 +763,7 @@ export const useOrganizationDetails = (
     setInsights(initialCategoryData());
     setVeeam(initialCategoryData());
     setUsers(initialCategoryData());
-  }, [clientId]);
+  }, [orgId]);
 
   return {
     selectedCategory,

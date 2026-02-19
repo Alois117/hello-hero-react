@@ -28,9 +28,10 @@ const SecurityLogs = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gradient mb-1">System Logs</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-destructive to-accent bg-clip-text text-transparent">
+              System Logs</h1>
             <p className="text-muted-foreground">
-              Keycloak audit events &amp; admin activity
+              Keycloak audit events &amp; AVIS activity logs
             </p>
           </div>
           <SystemLogsConnectionStatus
