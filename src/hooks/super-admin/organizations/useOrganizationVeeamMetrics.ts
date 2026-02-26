@@ -428,26 +428,19 @@ export const useOrganizationVeeamMetrics = (
               console.log("[BR super-admin] Parsed main keys:", Object.keys(mainObj));
 
               // Extract lists from the main object (same shape as User Dashboard)
-              const matched: BRMatchedVm[] = defensivelyFilterBRList(
-                Array.isArray(mainObj.matched) ? mainObj.matched : [],
-                clientId
-              );
-              const vmsWithoutJobs: BRUnprotectedVm[] = defensivelyFilterBRList(
-                Array.isArray(mainObj.vmsWithoutJobs) ? mainObj.vmsWithoutJobs : [],
-                clientId
-              );
-              const jobsWithoutVMs: BROrphanJob[] = defensivelyFilterBRList(
-                Array.isArray(mainObj.jobsWithoutVMs) ? mainObj.jobsWithoutVMs : [],
-                clientId
-              );
-              const multiVMJobs: BRMultiVmJob[] = defensivelyFilterBRList(
-                Array.isArray(mainObj.multiVMJobs) ? mainObj.multiVMJobs : [],
-                clientId
-              );
-              const replicas: BRReplica[] = defensivelyFilterBRList(
-                Array.isArray(mainObj.replicas) ? mainObj.replicas : [],
-                clientId
-              );
+              // Backend already scopes response by client_id (sent in POST body).
+              // Do NOT re-filter client-side — items may not carry their own client_id field,
+              // which causes defensivelyFilterBRList to drop valid rows.
+              const matched: BRMatchedVm[] =
+                Array.isArray(mainObj.matched) ? mainObj.matched : [];
+              const vmsWithoutJobs: BRUnprotectedVm[] =
+                Array.isArray(mainObj.vmsWithoutJobs) ? mainObj.vmsWithoutJobs : [];
+              const jobsWithoutVMs: BROrphanJob[] =
+                Array.isArray(mainObj.jobsWithoutVMs) ? mainObj.jobsWithoutVMs : [];
+              const multiVMJobs: BRMultiVmJob[] =
+                Array.isArray(mainObj.multiVMJobs) ? mainObj.multiVMJobs : [];
+              const replicas: BRReplica[] =
+                Array.isArray(mainObj.replicas) ? mainObj.replicas : [];
 
               setBrData({
                 summary: mainObj.summary ?? null,

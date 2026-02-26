@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { logAuditEvent, AUDIT_EVENTS } from "@/audit-logs";
 import UserLayout from "@/layouts/UserLayout";
 import { FileText, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const UserReports = () => {
   const handleReportClick = useCallback((report: ReportItem) => {
     setSelectedReport(report);
     setIsDrawerOpen(true);
+    logAuditEvent(AUDIT_EVENTS.REPORT_VIEW, { entity_type: 'report', entity_id: String(report.created_at), meta: { type: report.report_type } });
   }, []);
 
   const handleCloseDrawer = useCallback(() => {
@@ -48,6 +50,7 @@ const UserReports = () => {
   }, []);
 
   const handleDownloadPdf = useCallback((report: ReportItem) => {
+    logAuditEvent(AUDIT_EVENTS.REPORT_DOWNLOAD, { entity_type: 'report', entity_id: String(report.created_at), result: 'success', meta: { format: 'pdf' } });
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(`

@@ -254,6 +254,7 @@ const OrganizationDetailView = ({
       case "users":
         return (
           <UsersDrilldown
+            orgId={organization.id}
             orgName={organization.name}
             users={users.items}
             loading={users.loading}

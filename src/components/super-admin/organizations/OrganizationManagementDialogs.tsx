@@ -1,13 +1,18 @@
 /**
  * Organization Management Dialogs
  * Create, Edit, and Toggle organization dialogs for Super Admin
+ *
+ * ✅ Update:
+ * - Create Organization collects:
+ *   - client_name + client_id (stored in Keycloak attributes as string[])
+ *   - redirectUrl (top-level Keycloak org field)
+ * - Description removed from Create dialog
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Building2, Edit, Loader2, Plus, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -27,7 +32,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { KeycloakOrganization, CreateOrgData, UpdateOrgData } from "@/hooks/keycloak/useKeycloakOrganizations";
+import type {
+  KeycloakOrganization,
+  CreateOrgData,
+  UpdateOrgData,
+} from "@/hooks/keycloak/useKeycloakOrganizations";
 
 // ─── Create Organization Dialog ─────────────────────────────────────────────
 
@@ -37,42 +46,72 @@ interface CreateOrgDialogProps {
   onCreate: (data: CreateOrgData) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const CreateOrganizationDialog = ({ open, onOpenChange, onCreate }: CreateOrgDialogProps) => {
+export const CreateOrganizationDialog = ({
+  open,
+  onOpenChange,
+  onCreate,
+}: CreateOrgDialogProps) => {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clientId, setClientId] = useState("");
   const [domain, setDomain] = useState("");
+  const [redirectUrl, setRedirectUrl] = useState("");
+  const [enabled, setEnabled] = useState(true);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = useMemo(() => {
+    const n = name.trim();
+    const cn = clientName.trim();
+    const cid = clientId.trim();
+    if (!n || !cn || !cid) return false;
+    return true;
+  }, [name, clientName, clientId]);
 
   useEffect(() => {
     if (open) {
       setName("");
-      setDescription("");
+      setClientName("");
+      setClientId("");
       setDomain("");
+      setRedirectUrl("");
+      setEnabled(true);
       setError(null);
+      setSubmitting(false);
     }
   }, [open]);
 
   const handleSubmit = async () => {
-    if (!name.trim()) return;
+    const n = name.trim();
+    const cn = clientName.trim();
+    const cid = clientId.trim();
+    const d = domain.trim();
+    const ru = redirectUrl.trim();
+
+    if (!n) return setError("Organization name is required.");
+    if (!cn) return setError("Client name is required.");
+    if (!cid) return setError("Client id is required.");
+
     setSubmitting(true);
     setError(null);
 
     const data: CreateOrgData = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      enabled: true,
-      domains: domain.trim() ? [{ name: domain.trim(), verified: false }] : undefined,
+      name: n,
+      enabled,
+      redirectUrl: ru || undefined,
+      domains: d ? [{ name: d, verified: false }] : undefined,
+      attributes: {
+        client_name: [cn],
+        client_id: [cid],
+      },
     };
 
     const result = await onCreate(data);
     setSubmitting(false);
 
-    if (result.success) {
-      onOpenChange(false);
-    } else {
-      setError(result.error || "Failed to create organization");
-    }
+    if (result.success) onOpenChange(false);
+    else setError(result.error || "Failed to create organization");
   };
 
   return (
@@ -83,10 +122,9 @@ export const CreateOrganizationDialog = ({ open, onOpenChange, onCreate }: Creat
             <Building2 className="w-5 h-5 text-primary" />
             Create Organization
           </DialogTitle>
-          <DialogDescription>
-            Create a new tenant organization in Keycloak.
-          </DialogDescription>
+          <DialogDescription>Create a new tenant organization in Keycloak.</DialogDescription>
         </DialogHeader>
+
         <div className="space-y-4">
           <div>
             <Label htmlFor="org-name">Organization Name *</Label>
@@ -94,39 +132,81 @@ export const CreateOrganizationDialog = ({ open, onOpenChange, onCreate }: Creat
               id="org-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Acme Corp"
+              placeholder="e.g. Chai Sacco"
               autoFocus
+              disabled={submitting}
             />
           </div>
+
           <div>
-            <Label htmlFor="org-desc">Description</Label>
-            <Textarea
-              id="org-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description..."
-              rows={2}
+            <Label htmlFor="client-name">Client Name *</Label>
+            <Input
+              id="client-name"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="e.g. Avis Kenya"
+              disabled={submitting}
             />
           </div>
+
+          <div>
+            <Label htmlFor="client-id">Client ID *</Label>
+            <Input
+              id="client-id"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="e.g. 123"
+              disabled={submitting}
+              inputMode="numeric"
+            />
+          </div>
+
           <div>
             <Label htmlFor="org-domain">Domain</Label>
             <Input
               id="org-domain"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              placeholder="e.g. acme.com"
+              placeholder="e.g. chaisacco.co.ke"
+              disabled={submitting}
             />
           </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+
+          {/* ✅ NEW Redirect URL field */}
+          <div>
+            <Label htmlFor="org-redirect-url">Redirect URL</Label>
+            <Input
+              id="org-redirect-url"
+              value={redirectUrl}
+              onChange={(e) => setRedirectUrl(e.target.value)}
+              placeholder="e.g. https://portal.chaisacco.co.ke"
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border/60 p-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Enabled</p>
+              <p className="text-xs text-muted-foreground">
+                Disabled orgs cannot access the portal.
+              </p>
+            </div>
+            <Switch checked={enabled} onCheckedChange={setEnabled} disabled={submitting} />
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting || !name.trim()}>
-            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          <Button onClick={handleSubmit} disabled={submitting || !canSubmit}>
+            {submitting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
+            )}
             Create
           </Button>
         </DialogFooter>
@@ -136,6 +216,7 @@ export const CreateOrganizationDialog = ({ open, onOpenChange, onCreate }: Creat
 };
 
 // ─── Edit Organization Dialog ───────────────────────────────────────────────
+// Kept minimal; you can add redirectUrl editing later if desired.
 
 interface EditOrgDialogProps {
   org: KeycloakOrganization | null;
@@ -145,34 +226,34 @@ interface EditOrgDialogProps {
 
 export const EditOrganizationDialog = ({ org, onOpenChange, onUpdate }: EditOrgDialogProps) => {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (org) {
       setName(org.name || "");
-      setDescription(org.description || "");
+      setEnabled(!!org.enabled);
       setError(null);
+      setSubmitting(false);
     }
   }, [org]);
 
   const handleSubmit = async () => {
     if (!org || !name.trim()) return;
+
     setSubmitting(true);
     setError(null);
 
     const result = await onUpdate(org.id, {
       name: name.trim(),
-      description: description.trim() || undefined,
+      enabled,
     });
+
     setSubmitting(false);
 
-    if (result.success) {
-      onOpenChange(false);
-    } else {
-      setError(result.error || "Failed to update organization");
-    }
+    if (result.success) onOpenChange(false);
+    else setError(result.error || "Failed to update organization");
   };
 
   return (
@@ -183,10 +264,9 @@ export const EditOrganizationDialog = ({ org, onOpenChange, onUpdate }: EditOrgD
             <Edit className="w-5 h-5 text-primary" />
             Edit Organization
           </DialogTitle>
-          <DialogDescription>
-            Update organization details.
-          </DialogDescription>
+          <DialogDescription>Update organization details.</DialogDescription>
         </DialogHeader>
+
         <div className="space-y-4">
           <div>
             <Label htmlFor="edit-org-name">Organization Name *</Label>
@@ -195,27 +275,33 @@ export const EditOrganizationDialog = ({ org, onOpenChange, onUpdate }: EditOrgD
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
+              disabled={submitting}
             />
           </div>
-          <div>
-            <Label htmlFor="edit-org-desc">Description</Label>
-            <Textarea
-              id="edit-org-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
+
+          <div className="flex items-center justify-between rounded-md border border-border/60 p-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Enabled</p>
+              <p className="text-xs text-muted-foreground">
+                Toggle access for users in this org.
+              </p>
+            </div>
+            <Switch checked={enabled} onCheckedChange={setEnabled} disabled={submitting} />
           </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || !name.trim()}>
-            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Edit className="w-4 h-4 mr-2" />}
+            {submitting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Edit className="w-4 h-4 mr-2" />
+            )}
             Save Changes
           </Button>
         </DialogFooter>

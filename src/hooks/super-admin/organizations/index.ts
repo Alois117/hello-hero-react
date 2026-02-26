@@ -9,3 +9,4 @@ export { useOrganizationMetrics } from "./useOrganizationMetrics";
 export { useOrganizationDetails } from "./useOrganizationDetails";
 export type { DrilldownCategory } from "./useOrganizationDetails";
 export { useOrganizationVeeamMetrics } from "./useOrganizationVeeamMetrics";
+export { useGlobalInfrastructureMetrics } from "./useGlobalInfrastructureMetrics";

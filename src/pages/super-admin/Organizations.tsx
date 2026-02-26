@@ -1,14 +1,15 @@
 /**
  * Super Admin Organizations Page
- * Displays all tenant organizations with real data from webhooks
- * Includes Create/Edit/Toggle organization management via Keycloak
+ * Default view: Global Infrastructure Overview
+ * Secondary view: Organization list with detail drill-down
  */
 import { useState } from "react";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
-import { 
-  useOrganizations, 
-  useOrganizationMetrics 
+import {
+  useOrganizations,
+  useOrganizationMetrics,
 } from "@/hooks/super-admin/organizations";
+import { useGlobalInfrastructureMetrics } from "@/hooks/super-admin/organizations/useGlobalInfrastructureMetrics";
 import { useKeycloakOrganizations, type KeycloakOrganization } from "@/hooks/keycloak/useKeycloakOrganizations";
 import {
   OrganizationsSummaryCards,
@@ -23,8 +24,11 @@ import {
   EditOrganizationDialog,
   ToggleOrganizationDialog,
 } from "@/components/super-admin/organizations/OrganizationManagementDialogs";
+import GlobalInfrastructureOverview from "@/components/super-admin/organizations/GlobalInfrastructureOverview";
+import GlobalFilterBar from "@/components/super-admin/organizations/GlobalFilterBar";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Plus, Globe, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,7 +54,6 @@ const Organizations = () => {
     setSelectedOrg,
   } = useOrganizations(10);
 
-  // Keycloak org management actions
   const {
     createOrganization,
     updateOrganization,
@@ -60,12 +63,21 @@ const Organizations = () => {
 
   const { toast } = useToast();
 
+  // Tab state — global overview is default
+  const [activeTab, setActiveTab] = useState("global");
+
   // Dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingOrg, setEditingOrg] = useState<KeycloakOrganization | null>(null);
   const [togglingOrg, setTogglingOrg] = useState<KeycloakOrganization | null>(null);
 
-  // Fetch detailed metrics when an org is selected
+  // Global infrastructure metrics
+  const globalMetrics = useGlobalInfrastructureMetrics({
+    organizations,
+    enabled: activeTab === "global" && !selectedOrg,
+  });
+
+  // Per-org detail metrics
   const {
     metrics: orgMetrics,
     loading: metricsLoading,
@@ -110,13 +122,20 @@ const Organizations = () => {
     return result;
   };
 
+  // Navigate to org detail from global overview
+  const handleOrgClickFromGlobal = (org: typeof selectedOrg) => {
+    if (!org) return;
+    setSelectedOrg(org);
+    setActiveTab("organizations");
+  };
+
   // If an organization is selected, show detail view
   if (selectedOrg) {
     return (
       <SuperAdminLayout>
         <div className="space-y-6 animate-fade-in">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => setSelectedOrg(null)}
             className="gap-2 mb-2"
           >
@@ -147,7 +166,7 @@ const Organizations = () => {
               Organizations
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage all tenant organizations
+              Global infrastructure overview & tenant management
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -163,33 +182,77 @@ const Organizations = () => {
           </div>
         </div>
 
-        <OrganizationsSummaryCards counts={counts} />
+        {/* Tabs: Global Overview | Organizations */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="bg-muted/50 border border-border/50">
+            <TabsTrigger value="global" className="gap-2">
+              <Globe className="w-4 h-4" />
+              Global Overview
+            </TabsTrigger>
+            <TabsTrigger value="organizations" className="gap-2">
+              <Building2 className="w-4 h-4" />
+              Organizations ({counts.total})
+            </TabsTrigger>
+          </TabsList>
 
-        <Card className="p-4 border-border/50">
-          <OrganizationsFilters
-            filters={filters}
-            onSearchChange={setSearchQuery}
-            onStatusChange={setStatusFilter}
-            onHasAlertsChange={setHasActiveAlertsFilter}
-            onClearFilters={clearFilters}
-          />
-        </Card>
+          {/* Global Overview Tab */}
+          <TabsContent value="global" className="mt-0">
+            <GlobalFilterBar
+              organizations={organizations}
+              searchQuery={globalMetrics.filters.searchQuery}
+              onSearchChange={globalMetrics.setSearchQuery}
+              timeRange={globalMetrics.filters.timeRange}
+              onTimeRangeChange={globalMetrics.setTimeRange}
+              selectedOrgIds={globalMetrics.filters.selectedOrgIds}
+              onSelectedOrgIdsChange={globalMetrics.setSelectedOrgIds}
+              onClearFilters={globalMetrics.clearFilters}
+            />
 
-        <OrganizationsList
-          organizations={paginatedOrganizations}
-          loading={loading}
-          error={error}
-          onOrgClick={setSelectedOrg}
-          selectedOrgId={selectedOrg?.id ?? null}
-        />
+            <div className="mt-6">
+              <GlobalInfrastructureOverview
+                summary={globalMetrics.summary}
+                orgRows={globalMetrics.filteredOrgRows}
+                loading={globalMetrics.loading}
+                error={globalMetrics.error}
+                lastUpdated={globalMetrics.lastUpdated}
+                onRefresh={globalMetrics.refresh}
+                onOrgClick={handleOrgClickFromGlobal}
+                organizations={organizations}
+              />
+            </div>
+          </TabsContent>
 
-        <OrganizationsPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={organizations.length}
-          pageSize={pageSize}
-          onPageChange={setCurrentPage}
-        />
+          {/* Organizations List Tab */}
+          <TabsContent value="organizations" className="mt-4 space-y-6">
+            <OrganizationsSummaryCards counts={counts} />
+
+            <Card className="p-4 border-border/50">
+              <OrganizationsFilters
+                filters={filters}
+                onSearchChange={setSearchQuery}
+                onStatusChange={setStatusFilter}
+                onHasAlertsChange={setHasActiveAlertsFilter}
+                onClearFilters={clearFilters}
+              />
+            </Card>
+
+            <OrganizationsList
+              organizations={paginatedOrganizations}
+              loading={loading}
+              error={error}
+              onOrgClick={setSelectedOrg}
+              selectedOrgId={selectedOrg?.id ?? null}
+            />
+
+            <OrganizationsPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={organizations.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Management Dialogs */}

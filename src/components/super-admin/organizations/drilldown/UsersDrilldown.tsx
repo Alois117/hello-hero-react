@@ -1,20 +1,35 @@
 /**
  * Users Drilldown Component
  * Shows detailed users list for the selected organization
+ * Includes Add User functionality with role selection + invitation email
  */
 import { useState, useMemo } from "react";
-import { Users, User, CheckCircle, XCircle, RefreshCw, Mail, Shield } from "lucide-react";
+import { logAuditEvent, AUDIT_EVENTS } from "@/audit-logs";
+import {
+  Users, User, XCircle, RefreshCw, Mail, Shield,
+  UserPlus, Loader2,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { UserItem } from "@/hooks/super-admin/organizations/useOrganizationDetails";
-import { format } from "date-fns";
+import { useKeycloakMembers } from "@/hooks/keycloak";
+import { useKeycloakUserManagement } from "@/hooks/keycloak";
+import { useToast } from "@/hooks/use-toast";
 
 interface UsersDrilldownProps {
+  orgId: string;
   orgName: string;
   users: UserItem[];
   loading: boolean;
@@ -24,21 +39,37 @@ interface UsersDrilldownProps {
 }
 
 type UserFilter = "all" | "active" | "inactive";
+type UserRole = "org_admin" | "user";
 
 const roleColors: Record<string, string> = {
   admin: "border-destructive/30 bg-destructive/10 text-destructive",
+  org_admin: "border-destructive/30 bg-destructive/10 text-destructive",
   user: "border-primary/30 bg-primary/10 text-primary",
   viewer: "border-muted/30 bg-muted/10 text-muted-foreground",
 };
 
-const UsersDrilldown = ({ orgName, users, loading, error, onRefresh, onItemClick }: UsersDrilldownProps) => {
+const UsersDrilldown = ({ orgId, orgName, users, loading, error, onRefresh, onItemClick }: UsersDrilldownProps) => {
   const [filter, setFilter] = useState<UserFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Create user dialog state
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    username: "",
+    email: "",
+    role: "user" as UserRole,
+  });
+
+  const { addMember } = useKeycloakMembers(orgId);
+  const { createUser, assignRealmRole, sendRequiredActionsEmail } = useKeycloakUserManagement();
+  const { toast } = useToast();
 
   const filteredUsers = useMemo(() => {
     let result = users;
 
-    // Apply filter
     switch (filter) {
       case "active":
         result = result.filter(u => u.status === "active");
@@ -48,7 +79,6 @@ const UsersDrilldown = ({ orgName, users, loading, error, onRefresh, onItemClick
         break;
     }
 
-    // Apply search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(u =>
@@ -66,6 +96,92 @@ const UsersDrilldown = ({ orgName, users, loading, error, onRefresh, onItemClick
     active: users.filter(u => u.status === "active").length,
     inactive: users.filter(u => u.status !== "active").length,
   }), [users]);
+
+  const resetForm = () => {
+    setFormData({ firstName: "", lastName: "", username: "", email: "", role: "user" });
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setShowCreateDialog(true);
+    logAuditEvent(AUDIT_EVENTS.DIALOG_OPEN, { section: 'SuperAdmin_CreateUser', entity_type: 'organization', entity_id: orgId });
+  };
+
+  const handleCreate = async () => {
+    if (!orgId || !formData.email.trim()) return;
+
+    setSubmitting(true);
+
+    try {
+      // 1) Create user in Keycloak (no password — invitation-only)
+      const created = await createUser({
+        email: formData.email.trim(),
+        username: formData.username.trim() || undefined,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        enabled: true,
+        requiredActions: ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
+      });
+
+      if (!created.success || !created.id) {
+        toast({ title: "Failed to create user", description: created.error, variant: "destructive" });
+        setSubmitting(false);
+        return;
+      }
+
+      const userId = created.id;
+
+      // 2) Add user as member of the organization
+      const memberResult = await addMember(userId);
+      if (!memberResult.success) {
+        toast({
+          title: "User created, but org membership failed",
+          description: memberResult.error,
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      // 3) Assign selected realm role
+      const roleResult = await assignRealmRole(userId, formData.role);
+      if (!roleResult.success) {
+        toast({
+          title: "User added to org, but role assignment failed",
+          description: roleResult.error,
+          variant: "destructive",
+        });
+        // Still continue — user is in the org
+      }
+
+      // 4) Send invitation email via Keycloak execute-actions-email
+      const emailResult = await sendRequiredActionsEmail(userId, {
+        actions: ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
+        lifespan: 86400, // 24 hours
+      });
+
+      if (!emailResult.success) {
+        toast({
+          title: "User created, but invitation email failed",
+          description: emailResult.error || "The user may need to be invited manually.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "User created and invitation sent", description: `Invitation email sent to ${formData.email}` });
+        logAuditEvent(AUDIT_EVENTS.USER_CREATE, { entity_type: 'user', entity_id: userId, result: 'success', meta: { role: formData.role, orgId } });
+      }
+
+      setShowCreateDialog(false);
+      resetForm();
+      onRefresh();
+    } catch (err) {
+      toast({ title: "Unexpected error", description: String(err), variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isFormValid = formData.email.trim().length > 0 && formData.role;
 
   if (error) {
     return (
@@ -98,9 +214,15 @@ const UsersDrilldown = ({ orgName, users, loading, error, onRefresh, onItemClick
             Organization members and their roles
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={openCreate} size="sm" className="gap-2">
+            <UserPlus className="w-4 h-4" />
+            Add User
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -213,6 +335,84 @@ const UsersDrilldown = ({ orgName, users, loading, error, onRefresh, onItemClick
           Showing {filteredUsers.length} of {users.length} users
         </p>
       )}
+
+      {/* Create User Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add User to {orgName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sa-create-firstName">First Name</Label>
+                <Input
+                  id="sa-create-firstName"
+                  placeholder="John"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData(p => ({ ...p, firstName: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sa-create-lastName">Last Name</Label>
+                <Input
+                  id="sa-create-lastName"
+                  placeholder="Doe"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData(p => ({ ...p, lastName: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sa-create-username">Username</Label>
+              <Input
+                id="sa-create-username"
+                placeholder="johndoe"
+                value={formData.username}
+                onChange={(e) => setFormData(p => ({ ...p, username: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sa-create-email">Email <span className="text-destructive">*</span></Label>
+              <Input
+                id="sa-create-email"
+                type="email"
+                placeholder="john@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sa-create-role">Role <span className="text-destructive">*</span></Label>
+              <Select value={formData.role} onValueChange={(v) => setFormData(p => ({ ...p, role: v as UserRole }))}>
+                <SelectTrigger id="sa-create-role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="org_admin">Organization Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                An invitation email will be sent to the user to complete their account setup.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={submitting || !isFormValid}>
+              {submitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <UserPlus className="w-4 h-4 mr-2" />
+              )}
+              Create & Send Invite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

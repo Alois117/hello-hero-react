@@ -25,6 +25,7 @@ import TermsOfUse from "./pages/legal/TermsOfUse";
 // Shared Components
 import FloatingAIChatWrapper from "./components/ai/FloatingAIChatWrapper";
 import CommandPalette from "./components/CommandPalette";
+import { AuditProvider, AuditRouteLogger } from "./audit-logs";
 
 // User Pages
 import UserDashboard from "./pages/user/UserDashboard";
@@ -70,6 +71,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <AuditProvider>
+            <AuditRouteLogger />
             <Routes>
 
               {/* Public Routes */}
@@ -124,6 +127,7 @@ const App = () => (
 
             <CommandPalette />
             <FloatingAIChatWrapper />
+            </AuditProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

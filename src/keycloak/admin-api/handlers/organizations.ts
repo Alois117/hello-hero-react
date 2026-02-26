@@ -3,14 +3,37 @@
  * Keycloak 26 Organizations Admin REST API
  *
  * Endpoints proxied:
- *   GET    /organizations          → List orgs (supports ?first, ?max, ?search)
- *   GET    /organizations/:id      → Get single org
- *   POST   /organizations          → Create org
- *   PUT    /organizations/:id      → Update org
- *   DELETE /organizations/:id      → Delete org
+ * GET    /organizations           → List orgs (supports ?first, ?max, ?search)
+ * GET    /organizations/:id       → Get single org
+ * POST   /organizations           → Create org
+ * PUT    /organizations/:id       → Update org
+ * DELETE /organizations/:id       → Delete org
  */
 import { keycloakAdminFetch } from "../lib/admin-client.ts";
 import { json } from "../lib/helpers.ts";
+
+function normalizeAttributes(input: unknown): Record<string, string[]> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+
+  const raw = input as Record<string, unknown>;
+  const out: Record<string, string[]> = {};
+
+  for (const [k, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) {
+      out[k] = v.map((x) => String(x));
+    } else if (v != null) {
+      out[k] = [String(v)];
+    }
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+function extractIdFromLocation(location: string | null): string | undefined {
+  if (!location) return undefined;
+  const parts = location.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : undefined;
+}
 
 export async function handleOrganizations(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -23,54 +46,42 @@ export async function handleOrganizations(req: Request): Promise<Response> {
   switch (req.method) {
     case "GET": {
       if (orgId) {
-        // ── Get single organization ──
         const response = await keycloakAdminFetch(`/organizations/${orgId}`);
         if (!response.ok) {
           const err = await response.text();
           console.error("[organizations] GET by id failed:", err);
-          return json(
-            { error: "Failed to fetch organization", detail: err },
-            response.status
-          );
+          return json({ error: "Failed to fetch organization", detail: err }, response.status);
         }
         return json(await response.json());
       }
 
-      // ── List organizations with pagination ──
       const first = url.searchParams.get("first") || "0";
       const max = url.searchParams.get("max") || "100";
       const search = url.searchParams.get("search") || "";
 
       let queryPath = `/organizations?first=${first}&max=${max}`;
-      if (search) {
-        queryPath += `&search=${encodeURIComponent(search)}`;
-      }
+      if (search) queryPath += `&search=${encodeURIComponent(search)}`;
 
       const response = await keycloakAdminFetch(queryPath);
       if (!response.ok) {
         const err = await response.text();
         console.error("[organizations] List failed:", err);
-        return json(
-          { error: "Failed to fetch organizations", detail: err },
-          response.status
-        );
+        return json({ error: "Failed to fetch organizations", detail: err }, response.status);
       }
 
       const orgs = await response.json();
 
-      // Also fetch total count for pagination metadata
+      // total count (optional)
       let total = Array.isArray(orgs) ? orgs.length : 0;
       try {
-        const countPath = `/organizations/count${
-          search ? `?search=${encodeURIComponent(search)}` : ""
-        }`;
+        const countPath = `/organizations/count${search ? `?search=${encodeURIComponent(search)}` : ""}`;
         const countRes = await keycloakAdminFetch(countPath);
         if (countRes.ok) {
           const countData = await countRes.json();
           total = typeof countData === "number" ? countData : total;
         }
       } catch {
-        // Count endpoint may not exist in all KC versions; fall back to array length
+        // ignore
       }
 
       return json({ organizations: orgs, total });
@@ -84,27 +95,38 @@ export async function handleOrganizations(req: Request): Promise<Response> {
         return json({ error: "Invalid JSON body" }, 400);
       }
 
-      if (!body.name || typeof body.name !== "string") {
+      const name = body.name;
+      if (!name || typeof name !== "string" || !name.trim()) {
         return json({ error: "Organization name is required" }, 400);
       }
 
+      const normalizedAttributes = normalizeAttributes(body.attributes);
+
+      const payload = {
+        ...body,
+        name: name.trim(),
+        attributes: normalizedAttributes,
+      };
+
       const response = await keycloakAdminFetch("/organizations", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
       if (response.status === 201) {
-        const location = response.headers.get("Location");
-        const createdId = location?.split("/").pop();
+        const createdId = extractIdFromLocation(response.headers.get("Location"));
         return json({ success: true, id: createdId }, 201);
+      }
+
+      if (response.status === 204 || response.ok) {
+        // Some setups return 204 on create; still succeed.
+        const createdId = extractIdFromLocation(response.headers.get("Location"));
+        return json({ success: true, id: createdId }, 200);
       }
 
       const err = await response.text();
       console.error("[organizations] Create failed:", err);
-      return json(
-        { error: "Failed to create organization", detail: err },
-        response.status
-      );
+      return json({ error: "Failed to create organization", detail: err }, response.status);
     }
 
     case "PUT": {
@@ -117,14 +139,21 @@ export async function handleOrganizations(req: Request): Promise<Response> {
         return json({ error: "Invalid JSON body" }, 400);
       }
 
-      // Keycloak PUT /organizations/{id} expects the full OrganizationRepresentation
-      // Fetch current first, then merge
+      // Fetch current first, then merge (Keycloak expects full representation)
       const getRes = await keycloakAdminFetch(`/organizations/${orgId}`);
-      if (!getRes.ok) {
-        return json({ error: "Organization not found" }, 404);
-      }
+      if (!getRes.ok) return json({ error: "Organization not found" }, 404);
+
       const current = await getRes.json();
-      const merged = { ...current, ...body, id: orgId };
+
+      const normalizedAttributes =
+        body.attributes !== undefined ? normalizeAttributes(body.attributes) : undefined;
+
+      const merged = {
+        ...current,
+        ...body,
+        id: orgId,
+        ...(body.attributes !== undefined ? { attributes: normalizedAttributes } : {}),
+      };
 
       const response = await keycloakAdminFetch(`/organizations/${orgId}`, {
         method: "PUT",
@@ -137,10 +166,7 @@ export async function handleOrganizations(req: Request): Promise<Response> {
 
       const err = await response.text();
       console.error("[organizations] Update failed:", err);
-      return json(
-        { error: "Failed to update organization", detail: err },
-        response.status
-      );
+      return json({ error: "Failed to update organization", detail: err }, response.status);
     }
 
     case "DELETE": {
@@ -156,10 +182,7 @@ export async function handleOrganizations(req: Request): Promise<Response> {
 
       const err = await response.text();
       console.error("[organizations] Delete failed:", err);
-      return json(
-        { error: "Failed to delete organization", detail: err },
-        response.status
-      );
+      return json({ error: "Failed to delete organization", detail: err }, response.status);
     }
 
     default:

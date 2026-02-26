@@ -1,29 +1,68 @@
-import { useState, useMemo, useCallback } from "react";
-import { UserPlus, Search, Filter, MoreVertical, Shield, Mail, Ban, CheckCircle, Loader2, Edit } from "lucide-react";
+import { useState, useMemo } from "react";
+import { logAuditEvent, AUDIT_EVENTS } from "@/audit-logs";
+import {
+  UserPlus,
+  Search,
+  MoreVertical,
+  Ban,
+  CheckCircle,
+  Loader2,
+  Edit,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import OrgAdminLayout from "@/layouts/OrgAdminLayout";
 import TablePagination from "@/components/ui/table-pagination";
 import { useOrganization } from "@/keycloak/context/OrganizationContext";
 import { useKeycloakMembers, type KeycloakMember } from "@/hooks/keycloak";
-import { useKeycloakUserManagement, type CreateUserData, type UpdateUserData } from "@/hooks/keycloak";
+import {
+  useKeycloakUserManagement,
+} from "@/hooks/keycloak";
 import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_REALM_ROLE = "user";
 
 const UserManagement = () => {
   const { organizationId } = useOrganization();
-  const { members, loading, error, refresh } = useKeycloakMembers(organizationId);
-  const { createUser, updateUser, toggleUserEnabled } = useKeycloakUserManagement();
+
+  const {
+    members,
+    loading,
+    error,
+    refresh,
+    addMember,
+  } = useKeycloakMembers(organizationId);
+
+  const {
+    createUser,
+    updateUser,
+    toggleUserEnabled,
+    assignRealmRole,
+  } = useKeycloakUserManagement();
+
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,13 +72,18 @@ const UserManagement = () => {
   // Dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<KeycloakMember | null>(null);
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", temporaryPassword: "" });
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    temporaryPassword: "",
+  });
   const [submitting, setSubmitting] = useState(false);
 
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return members;
     const q = searchQuery.toLowerCase();
-    return members.filter(u =>
+    return members.filter((u) =>
       u.firstName?.toLowerCase().includes(q) ||
       u.lastName?.toLowerCase().includes(q) ||
       u.email?.toLowerCase().includes(q) ||
@@ -58,39 +102,96 @@ const UserManagement = () => {
   const currentUsers = filteredUsers.slice(startIndex, endIndex);
 
   const getUserDisplayName = (u: KeycloakMember) =>
-    [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || u.email || "Unknown";
+    [u.firstName, u.lastName].filter(Boolean).join(" ") ||
+    u.username ||
+    u.email ||
+    "Unknown";
 
   const openCreate = () => {
     setFormData({ firstName: "", lastName: "", email: "", temporaryPassword: "" });
     setShowCreateDialog(true);
+    logAuditEvent(AUDIT_EVENTS.DIALOG_OPEN, { section: 'CreateUser' });
   };
 
   const openEdit = (user: KeycloakMember) => {
-    setFormData({ firstName: user.firstName || "", lastName: user.lastName || "", email: user.email || "", temporaryPassword: "" });
+    setFormData({
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      temporaryPassword: "",
+    });
     setEditingUser(user);
   };
 
   const handleCreate = async () => {
+    if (!organizationId) {
+      toast({
+        title: "No organization selected",
+        description: "Please select an organization before creating a user.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
-    const result = await createUser({
+
+    // 1) Create user in realm
+    const created = await createUser({
       email: formData.email,
       firstName: formData.firstName,
       lastName: formData.lastName,
       temporaryPassword: formData.temporaryPassword || undefined,
     });
-    setSubmitting(false);
 
-    if (result.success) {
-      toast({ title: "User created successfully" });
-      setShowCreateDialog(false);
-      refresh();
-    } else {
-      toast({ title: "Failed to create user", description: result.error, variant: "destructive" });
+    if (!created.success || !created.id) {
+      setSubmitting(false);
+      toast({
+        title: "Failed to create user",
+        description: created.error,
+        variant: "destructive",
+      });
+      return;
     }
+
+    const userId = created.id;
+
+    // 2) Attach to org (member)
+    const added = await addMember(userId);
+    if (!added.success) {
+      setSubmitting(false);
+      toast({
+        title: "User created, but not added to organization",
+        description: added.error || "Failed to add member",
+        variant: "destructive",
+      });
+      // NOTE: User exists in realm now; you can optionally implement cleanup (DELETE user) later.
+      return;
+    }
+
+    // 3) Assign default realm role
+    const roleRes = await assignRealmRole(userId, DEFAULT_REALM_ROLE);
+    if (!roleRes.success) {
+      setSubmitting(false);
+      toast({
+        title: "User added to org, but role assignment failed",
+        description: roleRes.error || "Failed to assign role",
+        variant: "destructive",
+      });
+      // Still refresh members, since org attachment succeeded.
+      refresh();
+      return;
+    }
+
+    setSubmitting(false);
+    toast({ title: "User created and added to organization" });
+    logAuditEvent(AUDIT_EVENTS.USER_CREATE, { entity_type: 'user', entity_id: userId, result: 'success' });
+    setShowCreateDialog(false);
+    refresh();
   };
 
   const handleUpdate = async () => {
     if (!editingUser) return;
+
     setSubmitting(true);
     const result = await updateUser(editingUser.id, {
       firstName: formData.firstName,
@@ -101,20 +202,33 @@ const UserManagement = () => {
 
     if (result.success) {
       toast({ title: "User updated successfully" });
+      logAuditEvent(AUDIT_EVENTS.USER_EDIT, { entity_type: 'user', entity_id: editingUser.id, result: 'success', changed_fields: ['firstName', 'lastName', 'email'] });
       setEditingUser(null);
       refresh();
     } else {
-      toast({ title: "Failed to update user", description: result.error, variant: "destructive" });
+      toast({
+        title: "Failed to update user",
+        description: result.error,
+        variant: "destructive",
+      });
     }
   };
 
   const handleToggle = async (user: KeycloakMember) => {
     const result = await toggleUserEnabled(user.id);
     if (result.success) {
-      toast({ title: `User ${result.enabled ? "enabled" : "disabled"} successfully` });
+      const action = result.enabled ? AUDIT_EVENTS.USER_ENABLE : AUDIT_EVENTS.USER_DISABLE;
+      logAuditEvent(action, { entity_type: 'user', entity_id: user.id, result: 'success' });
+      toast({
+        title: `User ${result.enabled ? "enabled" : "disabled"} successfully`,
+      });
       refresh();
     } else {
-      toast({ title: "Failed to toggle user", description: result.error, variant: "destructive" });
+      toast({
+        title: "Failed to toggle user",
+        description: result.error,
+        variant: "destructive",
+      });
     }
   };
 
@@ -149,7 +263,9 @@ const UserManagement = () => {
         {error && (
           <div className="mb-4 p-4 border border-destructive/30 bg-destructive/5 rounded-lg text-sm text-destructive">
             {error}
-            <Button variant="outline" size="sm" className="ml-4" onClick={refresh}>Retry</Button>
+            <Button variant="outline" size="sm" className="ml-4" onClick={refresh}>
+              Retry
+            </Button>
           </div>
         )}
 
@@ -211,9 +327,15 @@ const UserManagement = () => {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleToggle(user)}>
                             {user.enabled ? (
-                              <><Ban className="w-4 h-4 mr-2" />Disable</>
+                              <>
+                                <Ban className="w-4 h-4 mr-2" />
+                                Disable
+                              </>
                             ) : (
-                              <><CheckCircle className="w-4 h-4 mr-2" />Enable</>
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Enable
+                              </>
                             )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -240,19 +362,53 @@ const UserManagement = () => {
       {/* Create User Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add New User</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>First Name</Label><Input value={formData.firstName} onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))} /></div>
-              <div><Label>Last Name</Label><Input value={formData.lastName} onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))} /></div>
+              <div>
+                <Label>First Name</Label>
+                <Input
+                  value={formData.firstName}
+                  onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Last Name</Label>
+                <Input
+                  value={formData.lastName}
+                  onChange={(e) => setFormData((p) => ({ ...p, lastName: e.target.value }))}
+                />
+              </div>
             </div>
-            <div><Label>Email</Label><Input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} /></div>
-            <div><Label>Temporary Password</Label><Input type="password" value={formData.temporaryPassword} onChange={e => setFormData(p => ({ ...p, temporaryPassword: e.target.value }))} /></div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Temporary Password</Label>
+              <Input
+                type="password"
+                value={formData.temporaryPassword}
+                onChange={(e) => setFormData((p) => ({ ...p, temporaryPassword: e.target.value }))}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={submitting || !formData.email}>
-              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={submitting || !formData.email || !organizationId}>
+              {submitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <UserPlus className="w-4 h-4 mr-2" />
+              )}
               Create User
             </Button>
           </DialogFooter>
@@ -262,18 +418,45 @@ const UserManagement = () => {
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>First Name</Label><Input value={formData.firstName} onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))} /></div>
-              <div><Label>Last Name</Label><Input value={formData.lastName} onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))} /></div>
+              <div>
+                <Label>First Name</Label>
+                <Input
+                  value={formData.firstName}
+                  onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Last Name</Label>
+                <Input
+                  value={formData.lastName}
+                  onChange={(e) => setFormData((p) => ({ ...p, lastName: e.target.value }))}
+                />
+              </div>
             </div>
-            <div><Label>Email</Label><Input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} /></div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>
+              Cancel
+            </Button>
             <Button onClick={handleUpdate} disabled={submitting}>
-              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Edit className="w-4 h-4 mr-2" />}
+              {submitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Edit className="w-4 h-4 mr-2" />
+              )}
               Save Changes
             </Button>
           </DialogFooter>

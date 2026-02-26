@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { X, Download, FileText, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ReportItem } from "@/hooks/useReports";
+import { logAuditEvent, AUDIT_EVENTS } from "@/audit-logs";
 
 interface ReportDrawerProps {
   report: ReportItem | null;
@@ -129,6 +130,7 @@ const ReportDrawer = ({ report, isOpen, onClose }: ReportDrawerProps) => {
   const handlePrintPdf = async () => {
     if (!report) return;
     setIsGeneratingPdf(true);
+    logAuditEvent(AUDIT_EVENTS.REPORT_DOWNLOAD, { entity_type: 'report', entity_id: String(report.created_at), result: 'success', meta: { type: report.report_type, format: 'pdf' } });
 
     try {
       const printWindow = window.open("", "_blank");

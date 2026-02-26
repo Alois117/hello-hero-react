@@ -16,6 +16,7 @@ export interface KeycloakOrganization {
   alias?: string;
   enabled: boolean;
   description?: string;
+  redirectUrl?: string; // ✅ NEW (matches Keycloak org UI field)
   attributes?: Record<string, string[]>;
   domains?: Array<{ name: string; verified: boolean }>;
 }
@@ -44,6 +45,7 @@ interface UseKeycloakOrganizationsReturn {
 export interface CreateOrgData {
   name: string;
   description?: string;
+  redirectUrl?: string; // ✅ NEW
   enabled?: boolean;
   domains?: Array<{ name: string; verified?: boolean }>;
   attributes?: Record<string, string[]>;
@@ -52,6 +54,7 @@ export interface CreateOrgData {
 export interface UpdateOrgData {
   name?: string;
   description?: string;
+  redirectUrl?: string; // ✅ NEW
   enabled?: boolean;
   attributes?: Record<string, string[]>;
 }
@@ -86,7 +89,6 @@ function extractOrgList(data: any): KeycloakOrganization[] {
 /** Detect if at least one org is missing attributes (typical Keycloak "brief" list) */
 function listLooksBrief(orgs: KeycloakOrganization[]): boolean {
   if (!Array.isArray(orgs) || orgs.length === 0) return false;
-  // if any org has undefined attributes, we consider it "brief"
   return orgs.some((o) => o.attributes == null);
 }
 
@@ -110,10 +112,8 @@ async function hydrateOrganizations(
         const res = await authenticatedFetch(`${BASE}/organizations/${baseOrg.id}`);
         if (res.ok) {
           const full = (await safeParseJson(res)) as KeycloakOrganization | null;
-          // Merge: full overrides base (but keep base as fallback)
           results[i] = { ...baseOrg, ...(full || {}) };
         } else {
-          // If details fails, keep base org so UI still works
           results[i] = baseOrg;
         }
       } catch {
@@ -158,7 +158,6 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
           throw new Error(`Failed to fetch organizations (${response.status})`);
         }
 
-        // Safe JSON parsing — guard against HTML error pages
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
           const text = await response.text();
@@ -178,9 +177,7 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
         const orgs = extractOrgList(data);
         const computedTotal = data?.total ?? orgs.length;
 
-        // ✅ If list is brief (no attributes), hydrate each org by ID.
         const needsHydration = listLooksBrief(orgs);
-
         let finalOrgs = orgs;
 
         if (needsHydration && orgs.length > 0) {
@@ -207,7 +204,6 @@ export const useKeycloakOrganizations = (): UseKeycloakOrganizationsReturn => {
     fetchOrganizations();
   }, [fetchOrganizations]);
 
-  // Auto-refresh every 60s
   useEffect(() => {
     const interval = setInterval(() => fetchOrganizations(true), 60000);
     return () => clearInterval(interval);

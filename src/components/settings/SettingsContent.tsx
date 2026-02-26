@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { logAuditEvent, AUDIT_EVENTS } from "@/audit-logs";
 
 const SettingsContent = () => {
   const { profile, isLoading, error, isSaving, fetchProfile, updateProfile } = useUserProfile();
@@ -61,8 +62,10 @@ const SettingsContent = () => {
         family_name: trimmedLast,
       });
       toast.success("Profile updated successfully!");
+      logAuditEvent(AUDIT_EVENTS.PROFILE_UPDATE, { entity_type: 'profile', result: 'success', changed_fields: ['firstName', 'lastName'] });
     } catch (err: any) {
       toast.error(err.message || "Failed to update profile");
+      logAuditEvent(AUDIT_EVENTS.PROFILE_UPDATE, { entity_type: 'profile', result: 'failure', error: err.message });
     }
   };
 

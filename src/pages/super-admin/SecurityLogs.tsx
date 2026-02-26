@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import SuperAdminLayout from "@/layouts/SuperAdminLayout";
 import { useSystemLogs } from "@/hooks/super-admin/system-logs";
 import {
@@ -6,6 +7,17 @@ import {
   SystemLogsTable,
   SystemLogsConnectionStatus,
 } from "@/components/super-admin/system-logs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { ScrollText } from "lucide-react";
+import {
+  isAuditEnabled,
+  setAuditEnabled,
+  logAuditEvent,
+  AUDIT_EVENTS,
+  getAuditQueueSize,
+} from "@/audit-logs";
 
 const SecurityLogs = () => {
   const {
@@ -22,6 +34,23 @@ const SecurityLogs = () => {
     clearFilters,
   } = useSystemLogs();
 
+  const [auditOn, setAuditOn] = useState(isAuditEnabled());
+  const [queueSize, setQueueSize] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setQueueSize(getAuditQueueSize()), 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleAudit = (checked: boolean) => {
+    setAuditEnabled(checked);
+    setAuditOn(checked);
+    logAuditEvent(AUDIT_EVENTS.AUDIT_TOGGLE, {
+      meta: { enabled: checked },
+      result: 'success',
+    });
+  };
+
   return (
     <SuperAdminLayout>
       <div className="space-y-6 animate-fade-in">
@@ -34,10 +63,29 @@ const SecurityLogs = () => {
               Keycloak audit events &amp; AVIS activity logs
             </p>
           </div>
-          <SystemLogsConnectionStatus
-            isConnected={isConnected}
-            lastUpdated={lastUpdated}
-          />
+          <div className="flex items-center gap-4">
+            {/* Frontend Audit Logging Toggle */}
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-card/50">
+              <ScrollText className="w-4 h-4 text-muted-foreground" />
+              <Label htmlFor="audit-toggle" className="text-sm font-medium cursor-pointer">
+                Frontend Audit Logs
+              </Label>
+              <Switch
+                id="audit-toggle"
+                checked={auditOn}
+                onCheckedChange={handleToggleAudit}
+              />
+              {auditOn && queueSize > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {queueSize} queued
+                </Badge>
+              )}
+            </div>
+            <SystemLogsConnectionStatus
+              isConnected={isConnected}
+              lastUpdated={lastUpdated}
+            />
+          </div>
         </div>
 
         {/* Summary Cards */}
