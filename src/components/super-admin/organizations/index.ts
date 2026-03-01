@@ -8,3 +8,5 @@ export { default as OrganizationsConnectionStatus } from "./OrganizationsConnect
 export { default as OrganizationsList } from "./OrganizationsList";
 export { default as OrganizationsPagination } from "./OrganizationsPagination";
 export { default as OrganizationDetailView } from "./OrganizationDetailView";
+export { default as GlobalInfrastructureFilterBar } from "./GlobalInfrastructureFilterBar";
+export { default as GlobalInfrastructureOverview } from "./GlobalInfrastructureOverview";

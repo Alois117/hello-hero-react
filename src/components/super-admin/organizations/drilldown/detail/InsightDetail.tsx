@@ -1,17 +1,22 @@
 /**
- * InsightDetail - Detail renderer for an AI Insight item
+ * InsightDetail - Drawer detail renderer aligned to user insight detail sections.
  */
-import { Brain, TrendingUp, AlertTriangle, Lightbulb, Clock, Hash } from "lucide-react";
+import { Brain, TrendingUp, AlertTriangle, Lightbulb, Server, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { InsightItem } from "@/hooks/super-admin/organizations/useOrganizationDetails";
-import { format } from "date-fns";
-import DetailField from "./DetailField";
-import RawJsonSection from "./RawJsonSection";
+import { getRelativeTime } from "@/hooks/useAiInsights";
 
 interface InsightDetailProps {
   item: InsightItem;
 }
+
+const getInsightType = (type: string): "prediction" | "anomaly" | "recommendation" | "insight" => {
+  const lowerType = (type || "").toLowerCase();
+  if (lowerType.includes("predict")) return "prediction";
+  if (lowerType.includes("anomal")) return "anomaly";
+  if (lowerType.includes("recommend")) return "recommendation";
+  return "insight";
+};
 
 const typeIcons: Record<string, React.ElementType> = {
   prediction: TrendingUp,
@@ -27,93 +32,96 @@ const typeColors: Record<string, string> = {
   insight: "border-secondary/30 bg-secondary/10 text-secondary",
 };
 
-const getInsightType = (type: string): string => {
-  const lowerType = (type || "").toLowerCase();
-  if (lowerType.includes("predict")) return "prediction";
-  if (lowerType.includes("anomal")) return "anomaly";
-  if (lowerType.includes("recommend")) return "recommendation";
-  return "insight";
+const severityBadgeStyles: Record<string, string> = {
+  critical: "bg-error/20 text-error border-error/30",
+  high: "bg-accent/20 text-accent border-accent/30",
+  medium: "bg-warning/20 text-warning border-warning/30",
+  low: "bg-success/20 text-success border-success/30",
+  info: "bg-primary/20 text-primary border-primary/30",
+};
+
+const extractHost = (summary: string) => {
+  const match = summary.match(/host[:\s]+([^\n\r,.]+)/i);
+  return match?.[1]?.trim() || "N/A";
+};
+
+const toStatus = (severity?: string) => {
+  const value = (severity || "").toLowerCase();
+  if (value.includes("critical") || value.includes("high")) return "active";
+  return "observed";
 };
 
 const InsightDetail = ({ item }: InsightDetailProps) => {
   const insightType = getInsightType(item.type);
   const Icon = typeIcons[insightType] || Brain;
+  const severity = (item.severity || "info").toLowerCase();
+  const host = extractHost(item.summary || "");
 
   return (
     <div className="space-y-6">
-      {/* Title & Type */}
       <div className="flex items-start gap-3">
-        <div className={`p-2.5 rounded-lg ${typeColors[insightType] || typeColors.insight}`}>
+        <div className={`p-3 rounded-lg shrink-0 border ${typeColors[insightType] || typeColors.insight}`}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold leading-tight">{item.title}</h3>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex flex-wrap items-start gap-2">
             <Badge
               variant="outline"
-              className={`text-xs capitalize ${typeColors[insightType] || typeColors.insight}`}
+              className={`capitalize ${severityBadgeStyles[severity] || severityBadgeStyles.info}`}
+            >
+              {severity}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`capitalize ${typeColors[insightType] || typeColors.insight}`}
             >
               {insightType}
             </Badge>
-            {item.severity && (
-              <Badge variant="outline" className="text-xs capitalize border-border/50">
-                {item.severity}
-              </Badge>
-            )}
+            <Badge variant="secondary" className="gap-1">
+              <Server className="w-3 h-3" />
+              {host}
+            </Badge>
+          </div>
+
+          <h3 className="text-lg leading-tight font-semibold">{item.title}</h3>
+          <p className="text-sm text-muted-foreground">{item.summary}</p>
+
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="w-4 h-4" />
+            <span>{getRelativeTime(item.timestamp)}</span>
           </div>
         </div>
       </div>
 
-      <Separator className="bg-border/50" />
+      <div className="border-t border-border pt-6 space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Entity Type</p>
+            <p className="font-medium mt-1">{insightType}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Host</p>
+            <p className="font-medium mt-1">{host}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Created</p>
+            <p className="font-medium mt-1">{item.timestamp.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+            <Badge variant="outline" className="capitalize mt-1">
+              {toStatus(item.severity)}
+            </Badge>
+          </div>
+        </div>
 
-      {/* Key Facts */}
-      <div className="space-y-1">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Insight Information</p>
-        <div className="grid grid-cols-2 gap-4">
-          <DetailField
-            label="Timestamp"
-            value={
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                {format(item.timestamp, "PPP p")}
-              </span>
-            }
-          />
-          <DetailField label="Type" value={insightType} />
-          <DetailField label="Insight ID" value={item.id} mono />
-          {item.client_id != null && (
-            <DetailField
-              label="Client ID"
-              value={
-                <span className="flex items-center gap-1.5">
-                  <Hash className="w-3.5 h-3.5 text-muted-foreground" />
-                  {item.client_id}
-                </span>
-              }
-              mono
-            />
-          )}
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Full Analysis</p>
+          <div className="p-5 rounded-lg bg-muted/50 border border-border">
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{item.summary || "No analysis available."}</p>
+          </div>
         </div>
       </div>
-
-      {/* Summary */}
-      {item.summary && (
-        <>
-          <Separator className="bg-border/50" />
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Summary</p>
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                {item.summary}
-              </p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Raw Data */}
-      <Separator className="bg-border/50" />
-      <RawJsonSection data={item} label="Technical Details (JSON)" />
     </div>
   );
 };

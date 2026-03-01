@@ -1,7 +1,7 @@
 /**
  * AI Insights Drilldown Component
- * Shows detailed insights list for the selected organization
- * ✅ Added pagination
+ * Reuses user dashboard InsightCard layout/interaction (inline expand/collapse).
+ * Existing Super Admin filter/search/pagination logic remains unchanged.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -11,18 +11,18 @@ import {
   TrendingUp,
   RefreshCw,
   XCircle,
-  Clock,
+  Zap,
+  Info,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InsightItem } from "@/hooks/super-admin/organizations/useOrganizationDetails";
-import { format } from "date-fns";
 import TablePagination from "@/components/ui/table-pagination";
+import InsightCard from "@/components/AI-Insights/InsightCard";
+import type { AiInsight } from "@/hooks/useAiInsights";
 
 interface InsightsDrilldownProps {
   orgName: string;
@@ -35,18 +35,164 @@ interface InsightsDrilldownProps {
 
 type InsightFilter = "all" | "predictions" | "anomalies" | "recommendations";
 
-const typeIcons: Record<string, React.ElementType> = {
-  prediction: TrendingUp,
-  anomaly: AlertTriangle,
-  recommendation: Lightbulb,
-  insight: Brain,
+const PAGE_SIZE = 8;
+
+const getInsightType = (type: string): string => {
+  const lowerType = (type || "").toLowerCase();
+  if (lowerType.includes("predict")) return "prediction";
+  if (lowerType.includes("anomal")) return "anomaly";
+  if (lowerType.includes("recommend")) return "recommendation";
+  return "insight";
 };
 
-const typeColors: Record<string, string> = {
-  prediction: "border-accent/30 bg-accent/10 text-accent",
-  anomaly: "border-warning/30 bg-warning/10 text-warning",
-  recommendation: "border-primary/30 bg-primary/10 text-primary",
-  insight: "border-secondary/30 bg-secondary/10 text-secondary",
+const toCardSeverity = (severity?: string): AiInsight["severity"] => {
+  const value = (severity || "").toLowerCase();
+  if (value.includes("critical") || value.includes("disaster")) return "critical";
+  if (value.includes("high") || value.includes("error")) return "high";
+  if (value.includes("low")) return "low";
+  if (value.includes("warning") || value.includes("average") || value.includes("medium")) return "medium";
+  return "info";
+};
+
+const toCardType = (type: string, severity?: string, summary?: string, title?: string): AiInsight["type"] => {
+  const combined = `${type || ""} ${severity || ""} ${summary || ""} ${title || ""}`.toLowerCase();
+  if (combined.includes("predict") || combined.includes("forecast")) return "prediction";
+  if (combined.includes("anomal") || combined.includes("outlier")) return "anomaly";
+  if (combined.includes("optimi") || combined.includes("improve") || combined.includes("recommend")) {
+    return "optimization";
+  }
+  if (
+    combined.includes("alert") ||
+    combined.includes("critical") ||
+    combined.includes("warning") ||
+    combined.includes("problem")
+  ) {
+    return "alert";
+  }
+  return "info";
+};
+
+const toCardImpact = (severity?: string): AiInsight["impact"] => {
+  const mapped = toCardSeverity(severity);
+  if (mapped === "critical") return "critical";
+  if (mapped === "high") return "high";
+  if (mapped === "low") return "low";
+  return "medium";
+};
+
+const extractHostFromSummary = (summary: string): string => {
+  const match = summary.match(/host[:\s]+([^\n\r,.]+)/i);
+  return match?.[1]?.trim() || "Unknown Host";
+};
+
+const buildRecommendation = (summary: string): string => {
+  if (!summary) return "Review the insight details for recommendations";
+  const patterns = [
+    /recommend[ation]*[s]?:?\s*(.+?)(?:\.|$)/i,
+    /suggest[ion]*[s]?:?\s*(.+?)(?:\.|$)/i,
+    /action[s]?:?\s*(.+?)(?:\.|$)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = summary.match(pattern);
+    if (match && match[1]) return match[1].trim();
+  }
+  return "Review the insight details for recommendations";
+};
+
+const inferEntityType = (rawType: string, title: string): string => {
+  const normalized = rawType.trim();
+  if (normalized && normalized.toLowerCase() !== "insight") return normalized;
+  const fromTitle = (title || "").match(/^([a-z0-9_.-]+)\s+insight$/i)?.[1];
+  return fromTitle ? fromTitle : "insight";
+};
+
+const resolveDisplayTitle = (title: string, entityType: string): string => {
+  const normalized = (title || "").trim();
+  if (normalized && normalized.toLowerCase() !== "ai insight") return normalized;
+  if (entityType && entityType.toLowerCase() !== "insight") return `${entityType} Insight`;
+  return "AI Insight";
+};
+
+const toInsightCardModel = (item: InsightItem): AiInsight => {
+  const summary = (item.summary || "").trim();
+  const rawType = (item.type || "").trim();
+  const entityType = inferEntityType(rawType, item.title);
+  const title = resolveDisplayTitle(item.title, entityType);
+  const host = extractHostFromSummary(summary);
+  const severity = toCardSeverity(item.severity);
+
+  return {
+    id: item.id,
+    entityType,
+    entityId: item.id,
+    host,
+    eventReference: item.id,
+    severity,
+    status: "generated",
+    createdAt: item.timestamp,
+    updatedAt: null,
+    responseContent: summary,
+    summary,
+    title,
+    type: toCardType(rawType, item.severity, summary, title),
+    impact: toCardImpact(item.severity),
+    confidence: 85,
+    recommendation: buildRecommendation(summary),
+  };
+};
+
+const getImpactColor = (impact: string) => {
+  switch (impact) {
+    case "critical":
+      return "text-error border-error/30 bg-error/10";
+    case "high":
+      return "text-accent border-accent/30 bg-accent/10";
+    case "medium":
+      return "text-warning border-warning/30 bg-warning/10";
+    default:
+      return "text-success border-success/30 bg-success/10";
+  }
+};
+
+const getSeverityBadge = (severity: AiInsight["severity"]) => {
+  const styles: Record<string, string> = {
+    critical: "bg-error/20 text-error border-error/30",
+    high: "bg-accent/20 text-accent border-accent/30",
+    medium: "bg-warning/20 text-warning border-warning/30",
+    low: "bg-success/20 text-success border-success/30",
+    info: "bg-primary/20 text-primary border-primary/30",
+  };
+  return styles[severity] || styles.info;
+};
+
+const getTypeIcon = (type: AiInsight["type"]) => {
+  switch (type) {
+    case "prediction":
+      return <TrendingUp className="w-5 h-5" />;
+    case "anomaly":
+      return <Zap className="w-5 h-5" />;
+    case "optimization":
+      return <Lightbulb className="w-5 h-5" />;
+    case "alert":
+      return <AlertTriangle className="w-5 h-5" />;
+    default:
+      return <Info className="w-5 h-5" />;
+  }
+};
+
+const getTypeColor = (type: AiInsight["type"]) => {
+  switch (type) {
+    case "prediction":
+      return "text-primary";
+    case "anomaly":
+      return "text-warning";
+    case "optimization":
+      return "text-success";
+    case "alert":
+      return "text-error";
+    default:
+      return "text-muted-foreground";
+  }
 };
 
 const InsightsDrilldown = ({
@@ -55,27 +201,15 @@ const InsightsDrilldown = ({
   loading,
   error,
   onRefresh,
-  onItemClick,
 }: InsightsDrilldownProps) => {
   const [filter, setFilter] = useState<InsightFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // ✅ Pagination
-  const PAGE_SIZE = 8;
   const [currentPage, setCurrentPage] = useState(1);
-
-  const getInsightType = (type: string): string => {
-    const lowerType = (type || "").toLowerCase();
-    if (lowerType.includes("predict")) return "prediction";
-    if (lowerType.includes("anomal")) return "anomaly";
-    if (lowerType.includes("recommend")) return "recommendation";
-    return "insight";
-  };
+  const [expandedInsights, setExpandedInsights] = useState<Record<string, boolean>>({});
 
   const filteredInsights = useMemo(() => {
     let result = insights;
 
-    // Apply filter
     if (filter !== "all") {
       result = result.filter((i) => {
         const type = getInsightType(i.type);
@@ -86,7 +220,6 @@ const InsightsDrilldown = ({
       });
     }
 
-    // Apply search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter((i) => {
@@ -97,8 +230,7 @@ const InsightsDrilldown = ({
       });
     }
 
-    // Sort latest first
-    return result.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return [...result].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [insights, filter, searchQuery]);
 
   const counts = useMemo(() => {
@@ -109,12 +241,10 @@ const InsightsDrilldown = ({
     return { all, predictions, anomalies, recommendations };
   }, [insights]);
 
-  // ✅ Reset page when filters/search change or list shrinks
   useEffect(() => {
     setCurrentPage(1);
   }, [filter, searchQuery]);
 
-  // ✅ Pagination calculations
   const totalItems = filteredInsights.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
@@ -123,7 +253,8 @@ const InsightsDrilldown = ({
     return filteredInsights.slice(startIndex, startIndex + PAGE_SIZE);
   }, [filteredInsights, currentPage]);
 
-  // If page is now out of range (e.g., fewer results after refresh)
+  const insightCards = useMemo(() => paginatedInsights.map(toInsightCardModel), [paginatedInsights]);
+
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
@@ -140,12 +271,7 @@ const InsightsDrilldown = ({
             <p className="font-medium">Failed to load insights</p>
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            className="ml-auto"
-          >
+          <Button variant="outline" size="sm" onClick={onRefresh} className="ml-auto">
             <RefreshCw className="w-4 h-4 mr-2" />
             Retry
           </Button>
@@ -156,7 +282,6 @@ const InsightsDrilldown = ({
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -172,13 +297,8 @@ const InsightsDrilldown = ({
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <Tabs
-          value={filter}
-          onValueChange={(v) => setFilter(v as InsightFilter)}
-          className="flex-shrink-0"
-        >
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as InsightFilter)} className="flex-shrink-0">
           <TabsList className="bg-muted/50">
             <TabsTrigger value="all" className="text-xs">
               All ({counts.all})
@@ -203,76 +323,45 @@ const InsightsDrilldown = ({
         />
       </div>
 
-      {/* Insights List */}
-      <ScrollArea className="h-[400px]">
-        <div className="space-y-2 pr-4">
-          {loading ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <Card key={i} className="p-4 border-border/50">
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-3 w-1/4" />
-                </div>
-              </Card>
-            ))
-          ) : totalItems === 0 ? (
-            <Card className="p-8 border-border/50 text-center">
-              <Brain className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">
-                {searchQuery ? "No insights match your search" : "No insights found"}
-              </p>
+      <div className="space-y-4">
+        {loading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-4 border-border/50">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
             </Card>
-          ) : (
-            paginatedInsights.map((insight) => {
-              const insightType = getInsightType(insight.type);
-              const Icon = typeIcons[insightType] || Brain;
+          ))
+        ) : totalItems === 0 ? (
+          <Card className="p-8 border-border/50 text-center">
+            <Brain className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+            <p className="text-muted-foreground">
+              {searchQuery ? "No insights match your search" : "No insights found"}
+            </p>
+          </Card>
+        ) : (
+          insightCards.map((insight) => (
+            <InsightCard
+              key={insight.id}
+              insight={insight}
+              expanded={!!expandedInsights[insight.id]}
+              onExpandedChange={(open) =>
+                setExpandedInsights((prev) => ({
+                  ...prev,
+                  [insight.id]: open,
+                }))
+              }
+              getImpactColor={getImpactColor}
+              getSeverityBadge={getSeverityBadge}
+              getTypeIcon={getTypeIcon}
+              getTypeColor={getTypeColor}
+            />
+          ))
+        )}
+      </div>
 
-              return (
-                <Card
-                  key={insight.id}
-                  className="p-4 border-border/50 hover:border-primary/30 transition-colors cursor-pointer"
-                  onClick={() => onItemClick?.(insight)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && onItemClick?.(insight)}
-                  aria-label={`View details for insight: ${insight.title}`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded ${typeColors[insightType] || typeColors.insight}`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs capitalize ${typeColors[insightType] || typeColors.insight}`}
-                        >
-                          {insightType}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {format(insight.timestamp, "MMM dd, HH:mm")}
-                      </div>
-                    </div>
-
-                    <p className="font-medium">{insight.title}</p>
-
-                    {insight.summary && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {insight.summary}
-                      </p>
-                    )}
-                  </div>
-                </Card>
-              );
-            })
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* ✅ Pagination */}
       {!loading && totalItems > 0 && (
         <TablePagination
           currentPage={currentPage}

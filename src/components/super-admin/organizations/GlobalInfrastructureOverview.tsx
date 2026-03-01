@@ -1,577 +1,543 @@
-/**
- * Global Infrastructure Overview
- * Default landing view for Super Admin Organizations page.
- * Shows aggregated infrastructure metrics across all organizations
- * with clickable cards that open per-org breakdown drilldowns.
- */
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  Server,
-  FileText,
-  Brain,
-  HardDrive,
-  Building2,
-  RefreshCw,
-  ChevronRight,
-  Loader2,
   Activity,
+  AlertTriangle,
+  Brain,
   CheckCircle,
+  ChevronDown,
+  FileText,
+  HardDrive,
+  RefreshCw,
+  Server,
   XCircle,
-  TrendingUp,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import TablePagination from "@/components/ui/table-pagination";
-import type {
-  GlobalMetricsSummary,
-  OrgMetricsRow,
+  type CategoryBreakdownRow,
+  type GlobalAlertItem,
+  type GlobalHostItem,
+  type GlobalInsightItem,
+  type GlobalReportItem,
+  type GlobalVeeamDrilldownData,
+  type GlobalMetricSummary,
+  requestGlobalReportsDetails,
+  type GlobalVeeamJobItem,
 } from "@/hooks/super-admin/organizations/useGlobalInfrastructureMetrics";
-import type { Organization } from "@/hooks/super-admin/organizations/types";
+import type {
+  AlertItem,
+  HostItem,
+  InsightItem,
+  ReportItem,
+  VeeamJobItem,
+  DrilldownCategory,
+} from "@/hooks/super-admin/organizations/useOrganizationDetails";
+import TablePagination from "@/components/ui/table-pagination";
+import ZabbixMetricsDrilldown from "./drilldown/ZabbixMetricsDrilldown";
+import ReportsDrilldown from "./drilldown/ReportsDrilldown";
+import InsightsDrilldown from "./drilldown/InsightsDrilldown";
+import VeeamMetricsDrilldown, { type VeeamSectionTab } from "./VeeamMetricsDrilldown";
+import { DrilldownDetailDrawer } from "./drilldown/detail";
+
+type GlobalCardCategory = "zabbix_metrics" | "reports" | "insights" | "veeam";
 
 interface GlobalInfrastructureOverviewProps {
-  summary: GlobalMetricsSummary;
-  orgRows: OrgMetricsRow[];
   loading: boolean;
   error: string | null;
-  lastUpdated: Date | null;
+  summary: GlobalMetricSummary;
+  alerts: GlobalAlertItem[];
+  hosts: GlobalHostItem[];
+  reports: GlobalReportItem[];
+  insights: GlobalInsightItem[];
+  veeamDrilldownData: GlobalVeeamDrilldownData;
+  veeamJobs: GlobalVeeamJobItem[];
+  alertsBreakdown: CategoryBreakdownRow[];
+  hostsBreakdown: CategoryBreakdownRow[];
+  reportsBreakdown: CategoryBreakdownRow[];
+  insightsBreakdown: CategoryBreakdownRow[];
+  veeamBreakdown: CategoryBreakdownRow[];
+  organizationSearchQuery: string;
   onRefresh: () => void;
-  onOrgClick: (org: Organization) => void;
-  organizations: Organization[];
 }
 
-type DrilldownMetric =
-  | "alerts"
-  | "hosts"
-  | "reports"
-  | "insights"
-  | "veeam"
-  | null;
-
-const PAGE_SIZE = 8;
-
-const cardVariants = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-};
-
-// ── Metric Card ──────────────────────────────────────────────────────────────
-
-function MetricCard({
-  title,
-  icon: Icon,
-  value,
-  subtitle,
-  details,
-  iconColor,
-  borderColor,
-  bgGradient,
-  isSelected,
-  onClick,
-  loading,
-  delay = 0,
-}: {
+interface ClickableMetricCardProps {
   title: string;
   icon: React.ElementType;
-  value: number;
-  subtitle?: string;
-  details?: { label: string; value: number; color?: string }[];
-  iconColor: string;
-  borderColor: string;
-  bgGradient: string;
+  loading: boolean;
+  iconColor?: string;
   isSelected: boolean;
   onClick: () => void;
-  loading: boolean;
-  delay?: number;
-}) {
-  return (
-    <motion.div
-      variants={cardVariants}
-      initial="initial"
-      animate="animate"
-      transition={{ duration: 0.3, delay }}
-    >
-      <Card
-        onClick={onClick}
-        className={`
-          p-4 cursor-pointer transition-all duration-200
-          hover:shadow-lg hover:shadow-primary/5
-          ${borderColor} bg-gradient-to-br ${bgGradient}
-          ${isSelected ? "ring-2 ring-primary/30 border-primary/50" : ""}
-        `}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Icon className={`w-5 h-5 ${iconColor}`} />
-            <h4 className="font-medium text-sm">{title}</h4>
-          </div>
-          <ChevronRight
-            className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${
-              isSelected ? "rotate-90 text-primary" : ""
-            }`}
-          />
-        </div>
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-20" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-        ) : (
-          <>
-            <p className="text-2xl font-bold tabular-nums">{value}</p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-            )}
-            {details && details.length > 0 && (
-              <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                {details.map((d) => (
-                  <span key={d.label} className={d.color || ""}>
-                    {d.value} {d.label}
-                  </span>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </Card>
-    </motion.div>
-  );
+  children: React.ReactNode;
 }
 
-// ── Org Breakdown Table ──────────────────────────────────────────────────────
+const BREAKDOWN_PAGE_SIZE = 8;
 
-function OrgBreakdownTable({
-  metric,
-  rows,
-  onOrgClick,
-  organizations,
-}: {
-  metric: DrilldownMetric;
-  rows: OrgMetricsRow[];
-  onOrgClick: (org: Organization) => void;
-  organizations: Organization[];
-}) {
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // Reset page when metric changes
-  useMemo(() => setCurrentPage(1), [metric]);
-
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const endIndex = startIndex + PAGE_SIZE;
-  const pageRows = rows.slice(startIndex, endIndex);
-
-  const orgLookup = useMemo(() => {
-    const map = new Map<string, Organization>();
-    organizations.forEach((o) => map.set(o.id, o));
-    return map;
-  }, [organizations]);
-
-  const handleRowClick = (row: OrgMetricsRow) => {
-    const org = orgLookup.get(row.orgId);
-    if (org) onOrgClick(org);
-  };
-
-  const columns = useMemo(() => {
-    switch (metric) {
-      case "alerts":
-        return [
-          { header: "Total Alerts", key: "alerts" as const },
-          { header: "Active", key: "activeAlerts" as const },
-          { header: "Critical", key: "criticalAlerts" as const },
-        ];
-      case "hosts":
-        return [
-          { header: "Total Hosts", key: "hosts" as const },
-          { header: "Enabled", key: "enabledHosts" as const },
-        ];
-      case "reports":
-        return [{ header: "Total Reports", key: "reports" as const }];
-      case "insights":
-        return [{ header: "Total Insights", key: "insights" as const }];
-      case "veeam":
-        return [
-          { header: "Jobs", key: "veeamJobs" as const },
-          { header: "Success", key: "veeamSuccess" as const },
-          { header: "Failed", key: "veeamFailed" as const },
-        ];
-      default:
-        return [];
-    }
-  }, [metric]);
-
-  if (!metric) return null;
-
-  const metricLabels: Record<string, string> = {
-    alerts: "Alerts",
-    hosts: "Hosts",
-    reports: "Reports",
-    insights: "AI Insights",
-    veeam: "Veeam Metrics",
-  };
-
-  return (
-    <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden animate-fade-in">
-      <div className="p-4 border-b border-border/50">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-primary" />
-          {metricLabels[metric]} — Breakdown by Organization
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Click a row to view that organization's details
-        </p>
+const ClickableMetricCard = ({
+  title,
+  icon: Icon,
+  loading,
+  iconColor = "text-primary",
+  isSelected,
+  onClick,
+  children,
+}: ClickableMetricCardProps) => (
+  <Card
+    className={`
+      p-4 border-border/50 transition-all duration-200 cursor-pointer
+      hover:border-primary/50 hover:shadow-md hover:shadow-primary/5 hover:bg-muted/30
+      ${isSelected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : ""}
+    `}
+    onClick={onClick}
+  >
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`w-5 h-5 ${isSelected ? "text-primary" : iconColor}`} />
+        <h4 className="font-medium text-sm">{title}</h4>
       </div>
-
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead>Organization</TableHead>
-              <TableHead>Status</TableHead>
-              {columns.map((col) => (
-                <TableHead key={col.key} className="text-right">
-                  {col.header}
-                </TableHead>
-              ))}
-              <TableHead className="w-8" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pageRows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={3 + columns.length}
-                  className="py-10 text-center text-muted-foreground"
-                >
-                  No organizations match filters
-                </TableCell>
-              </TableRow>
-            ) : (
-              pageRows.map((row) => (
-                <TableRow
-                  key={row.orgId}
-                  className="hover:bg-muted/30 cursor-pointer transition-colors"
-                  onClick={() => handleRowClick(row)}
-                >
-                  <TableCell className="font-medium">{row.orgName}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        row.status === "active"
-                          ? "border-success/30 bg-success/10 text-success text-[10px]"
-                          : "border-muted/30 bg-muted/10 text-muted-foreground text-[10px]"
-                      }
-                    >
-                      {row.status}
-                    </Badge>
-                  </TableCell>
-                  {columns.map((col) => (
-                    <TableCell
-                      key={col.key}
-                      className="text-right font-mono tabular-nums"
-                    >
-                      {row[col.key]}
-                    </TableCell>
-                  ))}
-                  <TableCell>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <TablePagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalItems={rows.length}
-        startIndex={startIndex}
-        endIndex={endIndex}
-        itemName="organizations"
-        onPageChange={setCurrentPage}
+      <ChevronDown
+        className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${
+          isSelected ? "rotate-180 text-primary" : ""
+        }`}
       />
-    </Card>
-  );
-}
-
-// ── Main Component ───────────────────────────────────────────────────────────
+    </div>
+    {loading ? (
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+    ) : (
+      children
+    )}
+  </Card>
+);
 
 const GlobalInfrastructureOverview = ({
-  summary,
-  orgRows,
   loading,
   error,
-  lastUpdated,
+  summary,
+  alerts,
+  hosts,
+  reports,
+  insights,
+  veeamDrilldownData,
+  veeamJobs,
+  alertsBreakdown,
+  hostsBreakdown,
+  reportsBreakdown,
+  insightsBreakdown,
+  veeamBreakdown,
+  organizationSearchQuery,
   onRefresh,
-  onOrgClick,
-  organizations,
 }: GlobalInfrastructureOverviewProps) => {
-  const [selectedMetric, setSelectedMetric] = useState<DrilldownMetric>(null);
+  const [selectedCategory, setSelectedCategory] = useState<GlobalCardCategory | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<
+    AlertItem | HostItem | ReportItem | InsightItem | VeeamJobItem | null
+  >(null);
+  const [breakdownPage, setBreakdownPage] = useState(1);
+  const [reportsDetailsRequested, setReportsDetailsRequested] = useState(false);
+  const [activeVeeamSection, setActiveVeeamSection] = useState<VeeamSectionTab>("backup");
 
-  const handleCardClick = (metric: DrilldownMetric) => {
-    setSelectedMetric((prev) => (prev === metric ? null : metric));
+  useEffect(() => {
+    setBreakdownPage(1);
+  }, [selectedCategory, organizationSearchQuery]);
+
+  // ✅ FIX: request details + immediately refetch so report list populates right away
+  useEffect(() => {
+    if (selectedCategory !== "reports") return;
+    if (reportsDetailsRequested) return;
+    requestGlobalReportsDetails();
+    setReportsDetailsRequested(true);
+    onRefresh(); // important to populate details immediately
+  }, [selectedCategory, reportsDetailsRequested, onRefresh]);
+
+  const handleCardClick = (category: GlobalCardCategory) => {
+    setSelectedCategory((prev) => (prev === category ? null : category));
+    if (category === "veeam") {
+      setActiveVeeamSection("backup");
+    }
+    setSelectedItem(null);
+    setDrawerOpen(false);
   };
 
-  if (error && orgRows.length === 0) {
-    return (
-      <Card className="p-12 text-center border-border/50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="p-4 rounded-full bg-destructive/10">
-            <AlertTriangle className="w-8 h-8 text-destructive" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-lg">
-              Failed to Load Global Metrics
-            </h3>
-            <p className="text-muted-foreground text-sm mt-1">{error}</p>
-          </div>
-          <Button variant="outline" onClick={onRefresh}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry
-          </Button>
-        </div>
-      </Card>
-    );
-  }
+  const breakdownMeta = useMemo(() => {
+    const query = organizationSearchQuery.trim().toLowerCase();
+    const filterRows = (rows: CategoryBreakdownRow[]) =>
+      !query ? rows : rows.filter((row) => row.organizationName.toLowerCase().includes(query));
+
+    switch (selectedCategory) {
+      case "zabbix_metrics": {
+        const merged = new Map<string, CategoryBreakdownRow>();
+        alertsBreakdown.forEach((row) => {
+          merged.set(row.organizationId, { ...row });
+        });
+        hostsBreakdown.forEach((hostRow) => {
+          const existing = merged.get(hostRow.organizationId);
+          if (!existing) {
+            merged.set(hostRow.organizationId, {
+              organizationId: hostRow.organizationId,
+              organizationName: hostRow.organizationName,
+              total: hostRow.total,
+              secondary: hostRow.secondary,
+              tertiary: hostRow.tertiary,
+            });
+            return;
+          }
+          merged.set(hostRow.organizationId, {
+            ...existing,
+            total: existing.total + hostRow.total,
+            secondary: existing.secondary + hostRow.secondary,
+            tertiary: existing.tertiary + hostRow.tertiary,
+          });
+        });
+        return {
+          title: "Zabbix Metrics Breakdown by Organization",
+          secondaryLabel: "Active",
+          tertiaryLabel: "Critical",
+          rows: filterRows(Array.from(merged.values())),
+        };
+      }
+      case "reports":
+        return {
+          title: "Reports Breakdown by Organization",
+          secondaryLabel: "Daily",
+          tertiaryLabel: "Weekly",
+          rows: filterRows(reportsBreakdown),
+        };
+      case "insights":
+        return {
+          title: "Insights Breakdown by Organization",
+          secondaryLabel: "Predictions",
+          tertiaryLabel: "Anomalies",
+          rows: filterRows(insightsBreakdown),
+        };
+      case "veeam":
+        {
+          const sectionBreakdowns = veeamDrilldownData.sectionBreakdowns;
+          const backupRows = sectionBreakdowns?.backup ?? veeamBreakdown;
+          const infrastructureRows = sectionBreakdowns?.infrastructure ?? [];
+          const alarmsRows = sectionBreakdowns?.alarms ?? [];
+
+          if (activeVeeamSection === "infrastructure") {
+            return {
+              title: "Veeam Infrastructure Breakdown by Organization",
+              secondaryLabel: "Protected",
+              tertiaryLabel: "Unprotected",
+              rows: filterRows(infrastructureRows),
+            };
+          }
+
+          if (activeVeeamSection === "alarms") {
+            return {
+              title: "Veeam Alarms Breakdown by Organization",
+              secondaryLabel: "Active",
+              tertiaryLabel: "Resolved",
+              rows: filterRows(alarmsRows),
+            };
+          }
+
+          return {
+            title: "Veeam Backup & Replication Breakdown by Organization",
+            secondaryLabel: "Success",
+            tertiaryLabel: "Failed",
+            rows: filterRows(backupRows),
+          };
+        }
+      default:
+        return null;
+    }
+  }, [
+    selectedCategory,
+    activeVeeamSection,
+    organizationSearchQuery,
+    alertsBreakdown,
+    hostsBreakdown,
+    reportsBreakdown,
+    insightsBreakdown,
+    veeamDrilldownData.sectionBreakdowns,
+    veeamBreakdown,
+  ]);
+
+  const paginatedBreakdown = useMemo(() => {
+    if (!breakdownMeta) return [];
+    const start = (breakdownPage - 1) * BREAKDOWN_PAGE_SIZE;
+    return breakdownMeta.rows.slice(start, start + BREAKDOWN_PAGE_SIZE);
+  }, [breakdownMeta, breakdownPage]);
+
+  const totalBreakdownPages = breakdownMeta
+    ? Math.max(1, Math.ceil(breakdownMeta.rows.length / BREAKDOWN_PAGE_SIZE))
+    : 1;
+
+  const drawerCategory: DrilldownCategory = useMemo(() => {
+    if (!selectedCategory) return null;
+    if (selectedCategory === "zabbix_metrics") {
+      if (selectedItem && "hostid" in selectedItem) return "hosts";
+      return "alerts";
+    }
+    if (selectedCategory === "reports") return "reports";
+    if (selectedCategory === "insights") return "insights";
+    if (selectedCategory === "veeam") return "veeam";
+    return null;
+  }, [selectedCategory, selectedItem]);
+
+  const selectedOrganizationName = useMemo(() => {
+    if (!selectedItem) return "Selected Organizations";
+    const maybeOrganizationName = selectedItem as { organizationName?: string };
+    return maybeOrganizationName.organizationName ?? "Selected Organizations";
+  }, [selectedItem]);
+
+  const reportsLoading = useMemo(
+    () =>
+      loading ||
+      (selectedCategory === "reports" &&
+        reportsDetailsRequested &&
+        summary.reports.total > 0 &&
+        reports.length === 0),
+    [loading, selectedCategory, reportsDetailsRequested, summary.reports.total, reports.length]
+  );
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20">
-            <Activity className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold">Global Infrastructure</h2>
-            <p className="text-xs text-muted-foreground">
-              Aggregated metrics across {organizations.length} organizations
-              {lastUpdated && (
-                <> · Updated {lastUpdated.toLocaleTimeString()}</>
-              )}
-            </p>
-          </div>
+        <div>
+          <h2 className="text-xl font-bold">Global Infrastructure Overview</h2>
+          <p className="text-sm text-muted-foreground">
+            Aggregated metrics across the selected organizations
+          </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onRefresh}
-          disabled={loading}
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-          />
+        <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
-      {/* Org Count Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          transition={{ duration: 0.3 }}
-          className="cyber-card border-primary/30 bg-gradient-to-br from-primary/20 to-primary/5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">
-                Total Organizations
-              </p>
-              <p className="text-3xl font-bold tabular-nums">
-                {organizations.length}
-              </p>
-            </div>
-            <Building2 className="w-8 h-8 text-primary opacity-50" />
-          </div>
-        </motion.div>
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          transition={{ duration: 0.3, delay: 0.05 }}
-          className="cyber-card border-success/30 bg-gradient-to-br from-success/20 to-success/5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">
-                With Infrastructure
-              </p>
-              <p className="text-3xl font-bold tabular-nums">
-                {organizations.filter((o) => o.clientId > 0).length}
-              </p>
-            </div>
-            <TrendingUp className="w-8 h-8 text-success opacity-50" />
-          </div>
-        </motion.div>
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          transition={{ duration: 0.3, delay: 0.1 }}
-          className="cyber-card border-warning/30 bg-gradient-to-br from-warning/20 to-warning/5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">
-                Active Alerts
-              </p>
-              <p className="text-3xl font-bold tabular-nums">
-                {loading ? "—" : summary.activeAlerts}
-              </p>
-            </div>
-            <AlertTriangle className="w-8 h-8 text-warning opacity-50" />
-          </div>
-        </motion.div>
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          transition={{ duration: 0.3, delay: 0.15 }}
-          className="cyber-card border-secondary/30 bg-gradient-to-br from-secondary/20 to-secondary/5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">
-                Total Hosts
-              </p>
-              <p className="text-3xl font-bold tabular-nums">
-                {loading ? "—" : summary.totalHosts}
-              </p>
-            </div>
-            <Server className="w-8 h-8 text-secondary opacity-50" />
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Clickable Infrastructure Cards */}
-      <div>
-        <p className="text-sm text-muted-foreground mb-3">
-          Click a category to see per-organization breakdown
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          <MetricCard
-            title="Zabbix Alerts"
-            icon={AlertTriangle}
-            value={summary.totalAlerts}
-            details={[
-              {
-                label: "active",
-                value: summary.activeAlerts,
-                color: "text-warning",
-              },
-              {
-                label: "critical",
-                value: summary.criticalAlerts,
-                color: "text-destructive",
-              },
-            ]}
-            iconColor="text-warning"
-            borderColor="border-warning/30"
-            bgGradient="from-warning/10 to-warning/5"
-            isSelected={selectedMetric === "alerts"}
-            onClick={() => handleCardClick("alerts")}
-            loading={loading}
-            delay={0}
-          />
-          <MetricCard
-            title="Hosts"
-            icon={Server}
-            value={summary.totalHosts}
-            details={[
-              {
-                label: "enabled",
-                value: summary.enabledHosts,
-                color: "text-success",
-              },
-              {
-                label: "disabled",
-                value: summary.disabledHosts,
-                color: "text-destructive",
-              },
-            ]}
-            iconColor="text-primary"
-            borderColor="border-primary/30"
-            bgGradient="from-primary/10 to-primary/5"
-            isSelected={selectedMetric === "hosts"}
-            onClick={() => handleCardClick("hosts")}
-            loading={loading}
-            delay={0.05}
-          />
-          <MetricCard
-            title="Reports"
-            icon={FileText}
-            value={summary.totalReports}
-            iconColor="text-secondary"
-            borderColor="border-secondary/30"
-            bgGradient="from-secondary/10 to-secondary/5"
-            isSelected={selectedMetric === "reports"}
-            onClick={() => handleCardClick("reports")}
-            loading={loading}
-            delay={0.1}
-          />
-          <MetricCard
-            title="AI Insights"
-            icon={Brain}
-            value={summary.totalInsights}
-            iconColor="text-accent"
-            borderColor="border-accent/30"
-            bgGradient="from-accent/10 to-accent/5"
-            isSelected={selectedMetric === "insights"}
-            onClick={() => handleCardClick("insights")}
-            loading={loading}
-            delay={0.15}
-          />
-          <MetricCard
-            title="Veeam Jobs"
-            icon={HardDrive}
-            value={summary.totalVeeamJobs}
-            details={[
-              {
-                label: "success",
-                value: summary.veeamSuccess,
-                color: "text-success",
-              },
-              {
-                label: "failed",
-                value: summary.veeamFailed,
-                color: "text-destructive",
-              },
-            ]}
-            iconColor="text-success"
-            borderColor="border-success/30"
-            bgGradient="from-success/10 to-success/5"
-            isSelected={selectedMetric === "veeam"}
-            onClick={() => handleCardClick("veeam")}
-            loading={loading}
-            delay={0.2}
-          />
-        </div>
-      </div>
-
-      {/* Drilldown Table */}
-      {selectedMetric && (
-        <OrgBreakdownTable
-          metric={selectedMetric}
-          rows={orgRows}
-          onOrgClick={onOrgClick}
-          organizations={organizations}
-        />
+      {error && (
+        <Card className="p-4 border-destructive/30 bg-destructive/5 text-sm text-destructive">
+          {error}
+        </Card>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <ClickableMetricCard
+          title="Zabbix Metrics"
+          icon={Activity}
+          loading={loading}
+          iconColor="text-primary"
+          isSelected={selectedCategory === "zabbix_metrics"}
+          onClick={() => handleCardClick("zabbix_metrics")}
+        >
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning" />
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">{summary.alerts.total}</span>
+                  <span className="text-sm font-normal text-muted-foreground">alerts</span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="text-warning">{summary.alerts.active} active</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="text-destructive">{summary.alerts.critical} critical</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4 text-primary" />
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">{summary.hosts.total}</span>
+                  <span className="text-sm font-normal text-muted-foreground">hosts</span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-success" />
+                <span>{summary.hosts.enabled} enabled</span>
+              </div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <XCircle className="w-3 h-3 text-destructive" />
+                <span>{summary.hosts.disabled} disabled</span>
+              </div>
+            </div>
+          </div>
+        </ClickableMetricCard>
+
+        <ClickableMetricCard
+          title="Reports"
+          icon={FileText}
+          loading={reportsLoading}
+          iconColor="text-secondary"
+          isSelected={selectedCategory === "reports"}
+          onClick={() => handleCardClick("reports")}
+        >
+          <div className="space-y-2">
+            <p className="text-2xl font-bold">{summary.reports.total}</p>
+            <div className="flex gap-3 text-xs text-muted-foreground">
+              <span>{summary.reports.daily} daily</span>
+              <span>{summary.reports.weekly} weekly</span>
+              <span>{summary.reports.monthly} monthly</span>
+            </div>
+          </div>
+        </ClickableMetricCard>
+
+        <ClickableMetricCard
+          title="AI Insights"
+          icon={Brain}
+          loading={loading}
+          iconColor="text-accent"
+          isSelected={selectedCategory === "insights"}
+          onClick={() => handleCardClick("insights")}
+        >
+          <div className="space-y-2">
+            <p className="text-2xl font-bold">{summary.insights.total}</p>
+            <div className="flex gap-4 text-sm text-muted-foreground">
+              <span>{summary.insights.predictions} predictions</span>
+              <span>{summary.insights.anomalies} anomalies</span>
+            </div>
+          </div>
+        </ClickableMetricCard>
+
+        <ClickableMetricCard
+          title="Veeam Metrics"
+          icon={HardDrive}
+          loading={loading}
+          iconColor="text-success"
+          isSelected={selectedCategory === "veeam"}
+          onClick={() => handleCardClick("veeam")}
+        >
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Infra VMs</p>
+                <p className="text-xl font-bold">{veeamDrilldownData.infraVMs.length}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Alarms</p>
+                <p className="text-xl font-bold">{veeamDrilldownData.alarmItems.length}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Jobs</p>
+                <p className="text-xl font-bold">{veeamJobs?.length || "—"}</p>   {/* ← safe access */}
+              </div>
+            </div>
+          </div>
+        </ClickableMetricCard>
+      </div>
+
+      <Collapsible open={selectedCategory !== null}>
+        <CollapsibleContent className="animate-accordion-down">
+          {selectedCategory && (
+            <Card className="p-6 border-border/50 bg-card/50 backdrop-blur-sm space-y-6">
+              {selectedCategory === "zabbix_metrics" && (
+                <ZabbixMetricsDrilldown
+                  orgName="Selected Organizations"
+                  alerts={{ items: alerts, loading, error: null }}
+                  hosts={{ items: hosts, loading, error: null }}
+                  onRefreshAlerts={onRefresh}
+                  onRefreshHosts={onRefresh}
+                  onItemClick={(item) => {
+                    setSelectedItem(item);
+                    setDrawerOpen(true);
+                  }}
+                />
+              )}
+
+              {selectedCategory === "reports" && (
+                <ReportsDrilldown
+                  orgName="Selected Organizations"
+                  reports={reports}
+                  loading={reportsLoading}
+                  error={null}
+                  onRefresh={onRefresh}
+                  onItemClick={(item) => {
+                    setSelectedItem(item);
+                    setDrawerOpen(true);
+                  }}
+                />
+              )}
+
+              {selectedCategory === "insights" && (
+                <InsightsDrilldown
+                  orgName="Selected Organizations"
+                  insights={insights}
+                  loading={loading}
+                  error={null}
+                  onRefresh={onRefresh}
+                />
+              )}
+
+              {selectedCategory === "veeam" && (
+                <VeeamMetricsDrilldown
+                  orgName="Selected Organizations"
+                  preloadedData={{
+                    ...veeamDrilldownData,
+                    onRefresh,
+                  }}
+                  onSectionChange={setActiveVeeamSection}
+                />
+              )}
+
+              {breakdownMeta && (
+                <Card className="p-4 border-border/50">
+                  <h4 className="font-semibold mb-3">{breakdownMeta.title}</h4>
+                  {breakdownMeta.rows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No organizations match the current filters.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="rounded-lg border border-border/50 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/40">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Organization</th>
+                              <th className="text-right p-3 font-medium">Total</th>
+                              <th className="text-right p-3 font-medium">{breakdownMeta.secondaryLabel}</th>
+                              <th className="text-right p-3 font-medium">{breakdownMeta.tertiaryLabel}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedBreakdown.map((row) => (
+                              <tr key={row.organizationId} className="border-t border-border/40">
+                                <td className="p-3">{row.organizationName}</td>
+                                <td className="p-3 text-right tabular-nums">{row.total}</td>
+                                <td className="p-3 text-right tabular-nums">{row.secondary}</td>
+                                <td className="p-3 text-right tabular-nums">{row.tertiary}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <TablePagination
+                        currentPage={breakdownPage}
+                        totalPages={totalBreakdownPages}
+                        totalItems={breakdownMeta.rows.length}
+                        startIndex={(breakdownPage - 1) * BREAKDOWN_PAGE_SIZE}
+                        endIndex={Math.min(breakdownPage * BREAKDOWN_PAGE_SIZE, breakdownMeta.rows.length)}
+                        itemName="organizations"
+                        onPageChange={setBreakdownPage}
+                      />
+                    </>
+                  )}
+                </Card>
+              )}
+            </Card>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
+
+      <DrilldownDetailDrawer
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedItem(null);
+        }}
+        category={drawerCategory}
+        item={selectedItem}
+        orgName={selectedOrganizationName}
+      />
     </div>
   );
 };

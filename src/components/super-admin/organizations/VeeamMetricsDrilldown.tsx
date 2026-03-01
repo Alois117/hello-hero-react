@@ -3,7 +3,7 @@
  * Comprehensive tabbed view mirroring the User Dashboard Veeam Metrics.
  * Tabs: Backup & Replication | Infrastructure | Alarms
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   HardDrive,
   Server,
@@ -51,6 +51,7 @@ import {
   type InfraVM,
   type VeeamAlarmItem,
   type BRMatchedVm,
+  type PreloadedVeeamMetricsData,
 } from "@/hooks/super-admin/organizations/useOrganizationVeeamMetrics";
 import StatusBadge from "@/pages/user/backup-replication/components/shared/StatusBadge";
 import { formatDateTime } from "@/pages/user/backup-replication/utils/format";
@@ -69,9 +70,13 @@ import type { MatchedVm, Job } from "@/pages/user/backup-replication/types";
 
 interface VeeamMetricsDrilldownProps {
   orgName: string;
-  clientId: number;
+  clientId?: number | null;
+  preloadedData?: PreloadedVeeamMetricsData;
   onRefresh?: () => void;
+  onSectionChange?: (section: VeeamSectionTab) => void;
 }
+
+export type VeeamSectionTab = "backup" | "infrastructure" | "alarms";
 
 // ── Pagination control ──────────────────────────────────────────────────────
 function PaginationBar({
@@ -166,12 +171,26 @@ function backupCurrentBadge(bc?: boolean) {
 // Main Component
 // ═════════════════════════════════════════════════════════════════════════════
 
-const VeeamMetricsDrilldown = ({ orgName, clientId }: VeeamMetricsDrilldownProps) => {
+const VeeamMetricsDrilldown = ({
+  orgName,
+  clientId = null,
+  preloadedData,
+  onSectionChange,
+}: VeeamMetricsDrilldownProps) => {
   // ✅ Only enable hook when clientId is valid (> 0)
-  const enabled = Number.isFinite(clientId) && clientId > 0;
-  const hook = useOrganizationVeeamMetrics({ clientId, enabled });
+  const isGlobalPreloaded = Boolean(preloadedData);
+  const enabled = isGlobalPreloaded || (Number.isFinite(clientId) && Number(clientId) > 0);
+  const hook = useOrganizationVeeamMetrics({
+    clientId: isGlobalPreloaded ? null : Number(clientId),
+    enabled,
+    preloadedData,
+  });
 
-  const [activeTab, setActiveTab] = useState("backup");
+  const [activeTab, setActiveTab] = useState<VeeamSectionTab>("backup");
+
+  useEffect(() => {
+    onSectionChange?.(activeTab);
+  }, [activeTab, onSectionChange]);
 
   if (!enabled) {
     return (
@@ -348,7 +367,10 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
             className="pl-9 bg-muted/30"
           />
         </div>
-        <Select value={hook.brPowerFilter} onValueChange={(v: any) => hook.setBrPowerFilter(v)}>
+        <Select
+          value={hook.brPowerFilter}
+          onValueChange={(v: "all" | "running" | "off") => hook.setBrPowerFilter(v)}
+        >
           <SelectTrigger className="w-[130px] bg-muted/30"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All States</SelectItem>
@@ -356,7 +378,10 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
             <SelectItem value="off">Powered Off</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={hook.brProtectedFilter} onValueChange={(v: any) => hook.setBrProtectedFilter(v)}>
+        <Select
+          value={hook.brProtectedFilter}
+          onValueChange={(v: "all" | "protected" | "unprotected") => hook.setBrProtectedFilter(v)}
+        >
           <SelectTrigger className="w-[140px] bg-muted/30"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
@@ -364,7 +389,10 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
             <SelectItem value="unprotected">Unprotected</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={hook.brStatusFilter} onValueChange={(v: any) => hook.setBrStatusFilter(v)}>
+        <Select
+          value={hook.brStatusFilter}
+          onValueChange={(v: "all" | "success" | "warning" | "stale") => hook.setBrStatusFilter(v)}
+        >
           <SelectTrigger className="w-[130px] bg-muted/30"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -605,17 +633,25 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
             <div>
               <h4 className="text-sm font-semibold text-destructive mb-2">Critical Alerts</h4>
               <div className="space-y-2">
-                {br.alerts?.critical?.map((alert: any, i: number) => (
-                  <div key={alert.id || i} className="p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                {br.alerts?.critical?.map((alert: unknown, i: number) => {
+                  const alertRecord =
+                    typeof alert === "object" && alert !== null ? (alert as Record<string, unknown>) : {};
+                  return (
+                  <div
+                    key={String(alertRecord.id ?? i)}
+                    className="p-3 rounded-lg border border-destructive/30 bg-destructive/5"
+                  >
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
                       <div>
-                        <p className="font-medium text-sm">{alert.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(alert.timestamp)}</p>
+                        <p className="font-medium text-sm">{String(alertRecord.message ?? "")}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDateTime(alertRecord.timestamp as string | number | Date | undefined)}
+                        </p>
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           )}
@@ -623,17 +659,25 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
             <div>
               <h4 className="text-sm font-semibold text-warning mb-2">Warnings</h4>
               <div className="space-y-2">
-                {br.alerts?.warnings?.map((alert: any, i: number) => (
-                  <div key={alert.id || i} className="p-3 rounded-lg border border-warning/30 bg-warning/5">
+                {br.alerts?.warnings?.map((alert: unknown, i: number) => {
+                  const alertRecord =
+                    typeof alert === "object" && alert !== null ? (alert as Record<string, unknown>) : {};
+                  return (
+                  <div
+                    key={String(alertRecord.id ?? i)}
+                    className="p-3 rounded-lg border border-warning/30 bg-warning/5"
+                  >
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-4 h-4 text-warning mt-0.5" />
                       <div>
-                        <p className="font-medium text-sm">{alert.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(alert.timestamp)}</p>
+                        <p className="font-medium text-sm">{String(alertRecord.message ?? "")}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDateTime(alertRecord.timestamp as string | number | Date | undefined)}
+                        </p>
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           )}
@@ -693,7 +737,10 @@ function InfrastructureTab({ hook }: { hook: ReturnType<typeof useOrganizationVe
             className="pl-9 bg-muted/30"
           />
         </div>
-        <Select value={hook.infraPowerFilter} onValueChange={(v: any) => hook.setInfraPowerFilter(v)}>
+        <Select
+          value={hook.infraPowerFilter}
+          onValueChange={(v: "all" | "PoweredOn" | "PoweredOff") => hook.setInfraPowerFilter(v)}
+        >
           <SelectTrigger className="w-[140px] bg-muted/30"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All States</SelectItem>
@@ -701,7 +748,10 @@ function InfrastructureTab({ hook }: { hook: ReturnType<typeof useOrganizationVe
             <SelectItem value="PoweredOff">Powered Off</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={hook.infraProtectionFilter} onValueChange={(v: any) => hook.setInfraProtectionFilter(v)}>
+        <Select
+          value={hook.infraProtectionFilter}
+          onValueChange={(v: "all" | "protected" | "unprotected") => hook.setInfraProtectionFilter(v)}
+        >
           <SelectTrigger className="w-[140px] bg-muted/30"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>

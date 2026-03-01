@@ -119,6 +119,43 @@ The application will be available at `http://localhost:5173`
 
 ---
 
+## Keycloak Admin API (Local)
+
+Super Admin Organizations and member management use a local Deno API at `src/keycloak/admin-api/index.ts`, proxied by Vite from `/api/keycloak/*` to `http://localhost:8000`.
+
+### 1) Configure environment
+
+Copy `.env.example` to `.env` (or merge values into your existing `.env`) and set:
+
+- `KEYCLOAK_BASE_URL` (required)
+- `KEYCLOAK_ADMIN_CLIENT_ID` (required)
+- `KEYCLOAK_ADMIN_CLIENT_SECRET` (required)
+- `KEYCLOAK_REALM` (optional, defaults to `Jarvis`)
+- `PORT` (optional, defaults to `8000`)
+
+If required variables are missing/invalid, the admin API now returns:
+
+- HTTP `503`
+- JSON body with actionable fields: `error`, `missing`, `invalid`
+
+### 2) Run admin API
+
+From repo root:
+
+```bash
+deno run -A src/keycloak/admin-api/index.ts
+```
+
+### 3) Run frontend
+
+```bash
+npm run dev
+```
+
+Vite serves on `http://localhost:8082` in this repo and proxies `/api/keycloak/*` to the Deno admin API.
+
+---
+
 ## External Integrations
 
 The application integrates with external monitoring systems via webhooks:

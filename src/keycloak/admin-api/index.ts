@@ -27,6 +27,10 @@ import { handleProfile } from "./handlers/profile.ts";
 import { handleOrganizations } from "./handlers/organizations.ts";
 import { handleMembers } from "./handlers/members.ts";
 import { handleUsers } from "./handlers/users.ts";
+import {
+  KeycloakAdminConfigError,
+  getKeycloakConfigStatus,
+} from "./lib/admin-client.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight
@@ -66,6 +70,17 @@ const handler = async (req: Request): Promise<Response> => {
 
     return json({ error: "Not found" }, 404);
   } catch (err) {
+    if (err instanceof KeycloakAdminConfigError) {
+      return json(
+        {
+          error: err.message,
+          missing: err.missing,
+          invalid: err.invalid,
+        },
+        503
+      );
+    }
+
     console.error("[admin-api] Unexpected error:", err);
     return json({ error: "Internal server error" }, 500);
   }
@@ -74,3 +89,14 @@ const handler = async (req: Request): Promise<Response> => {
 const port = Number(Deno.env.get("PORT") ?? "8000");
 serve(handler, { hostname: "0.0.0.0", port });
 console.log(`[admin-api] Listening on http://0.0.0.0:${port}/`);
+
+const configStatus = getKeycloakConfigStatus();
+if (!configStatus.ok) {
+  console.warn(
+    "[admin-api] Keycloak admin config missing/invalid env vars.",
+    {
+      missing: configStatus.missing,
+      invalid: configStatus.invalid,
+    }
+  );
+}

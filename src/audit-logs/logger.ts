@@ -1,6 +1,6 @@
 /**
  * Core Audit Logger
- *
+ * 
  * Singleton logger with:
  * - Async non-blocking send
  * - In-memory queue with localStorage persistence (bounded)
@@ -8,10 +8,6 @@
  * - Deduplication for bursty events
  * - Enable/disable toggle
  * - Offline resilience
- *
- * IMPORTANT FIX:
- * - Never send payloads with client_id <= 0 to webhook.
- * - Keep them queued until client_id becomes valid, then flush.
  */
 
 import { WEBHOOK_AUDIT_LOGS_URL } from '@/config/env';
@@ -52,21 +48,9 @@ const getDashboardFromRoute = (route: string): AuditEventDetails['dashboard'] =>
   if (route.startsWith('/super-admin')) return 'super_admin';
   if (route.startsWith('/admin')) return 'org_admin';
   if (route.startsWith('/dashboard')) return 'user';
-  if (
-    route === '/' ||
-    route.startsWith('/login') ||
-    route.startsWith('/signup') ||
-    route.startsWith('/forgot') ||
-    route.startsWith('/reset') ||
-    route.startsWith('/2fa') ||
-    route.startsWith('/privacy') ||
-    route.startsWith('/terms')
-  ) return 'public';
+  if (route === '/' || route.startsWith('/login') || route.startsWith('/signup') || route.startsWith('/forgot') || route.startsWith('/reset') || route.startsWith('/2fa') || route.startsWith('/privacy') || route.startsWith('/terms')) return 'public';
   return 'unknown';
 };
-
-const isPositiveInt = (n: unknown): n is number =>
-  typeof n === 'number' && Number.isInteger(n) && n > 0;
 
 // ─── Persistence ────────────────────────────────────────────────────────────
 
@@ -124,17 +108,10 @@ const flush = async (): Promise<void> => {
   const failed: AuditQueueEntry[] = [];
 
   for (const entry of batch) {
-    // IMPORTANT: Never send invalid client_id
-    if (!isPositiveInt(entry.payload.client_id)) {
-      failed.push(entry);
-      continue;
-    }
-
     const ok = await sendPayload(entry.payload);
     if (!ok) {
       entry.attempts += 1;
       if (entry.attempts < AUDIT_MAX_RETRIES) {
-        // backoff is handled by interval retry; keep queued
         failed.push(entry);
       }
       // else: drop after max retries
@@ -192,11 +169,6 @@ export const destroyAuditLogger = (): void => {
  */
 export const setAuditUserContext = (ctx: AuditUserContext | null): void => {
   _userContext = ctx;
-
-  // If context now includes a valid clientId, try flushing immediately.
-  if (_enabled && isPositiveInt(_userContext?.clientId) && navigator.onLine !== false) {
-    flush();
-  }
 };
 
 /**
@@ -216,7 +188,7 @@ export const setAuditEnabled = (enabled: boolean): void => {
 
 /**
  * Log an audit event.
- *
+ * 
  * This is the main entry point. Non-blocking, safe to call anywhere.
  */
 export const logAuditEvent = (
@@ -255,13 +227,8 @@ export const logAuditEvent = (
     ...details,
   };
 
-  const clientId = _userContext?.clientId;
-
-  // IMPORTANT:
-  // - If clientId isn't available/valid yet, queue the event but DO NOT send.
-  // - This prevents webhook validation failures (client_id must be positive).
   const payload: AuditLogPayload = {
-    client_id: isPositiveInt(clientId) ? clientId : 0,
+    client_id: _userContext?.clientId ?? 0,
     user_id: _userContext?.userId || 'anonymous',
     username: _userContext?.username || 'anonymous',
     details: fullDetails,
@@ -280,18 +247,12 @@ export const logAuditEvent = (
   // Persist immediately for crash safety
   persistQueue();
 
-  const canSendNow =
-    isPositiveInt(payload.client_id) &&
-    navigator.onLine !== false;
-
-  // Attempt eager send (non-blocking) ONLY if client_id is valid
-  if (canSendNow) {
+  // Attempt eager send (non-blocking)
+  if (navigator.onLine !== false) {
     sendPayload(payload).then((ok) => {
       if (ok) {
         _queue = _queue.filter((e) => e.id !== entry.id);
         persistQueue();
-      } else {
-        // keep queued; flush loop will retry up to max retries
       }
     });
   }

@@ -231,7 +231,6 @@ const OrganizationDetailView = ({
             loading={insights.loading}
             error={insights.error}
             onRefresh={handleRefreshCategory}
-            onItemClick={handleItemClick}
           />
         );
       case "veeam":
