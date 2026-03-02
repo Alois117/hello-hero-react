@@ -61,7 +61,6 @@ const Organizations = () => {
     setSelectedOrg,
   } = useOrganizations(10);
 
-  // Keycloak org management actions + source organizations for global mode
   const {
     organizations: keycloakOrganizations,
     createOrganization,
@@ -72,13 +71,12 @@ const Organizations = () => {
 
   const { toast } = useToast();
 
-  // Dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingOrg, setEditingOrg] = useState<KeycloakOrganization | null>(null);
   const [togglingOrg, setTogglingOrg] = useState<KeycloakOrganization | null>(null);
+
   const [activeView, setActiveView] = useState<"global" | "organization">("global");
 
-  // Global filters — simplified: no dual scope, just optional org filter
   const [globalSelectedOrgId, setGlobalSelectedOrgId] = useState<string | null>(null);
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalTimeRange, setGlobalTimeRange] = useState<GlobalTimeRange>("all");
@@ -107,14 +105,12 @@ const Organizations = () => {
     [keycloakOrganizations]
   );
 
-  // Keep selected org ID valid
   useEffect(() => {
     if (globalSelectedOrgId && !globalOrganizations.find((o) => o.id === globalSelectedOrgId)) {
       setGlobalSelectedOrgId(null);
     }
   }, [globalOrganizations, globalSelectedOrgId]);
 
-  // Derive scope + selectedOrgIds from simplified state
   const globalScope = globalSelectedOrgId ? "specific" as const : "all" as const;
   const globalSelectedOrgIds = globalSelectedOrgId ? [globalSelectedOrgId] : [];
 
@@ -145,7 +141,6 @@ const Organizations = () => {
     enabled: true,
   });
 
-  // Fetch detailed metrics when an org is selected
   const {
     metrics: orgMetrics,
     loading: metricsLoading,
@@ -227,7 +222,16 @@ const Organizations = () => {
             <TabsTrigger value="organization">Organization Explorer</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="global" className="space-y-4 mt-4">
+          {/* ────────────────────────────────────────────────
+              Summary cards live here — between the tabs and the content
+          ──────────────────────────────────────────────── */}
+          {activeView === "global" && (
+            <div className="mt-5 mb-6">
+              <OrganizationsSummaryCards counts={counts} alerts={globalAlerts} />
+            </div>
+          )}
+
+          <TabsContent value="global" className="space-y-4 mt-2">
             <GlobalInfrastructureFilterBar
               organizations={globalOrganizations}
               selectedOrgId={globalSelectedOrgId}
@@ -241,9 +245,6 @@ const Organizations = () => {
               searchQuery={globalSearchQuery}
               onSearchQueryChange={setGlobalSearchQuery}
             />
-
-            {/* Summary Cards — moved here from Organization Explorer */}
-            <OrganizationsSummaryCards counts={counts} alerts={globalAlerts} />
 
             <GlobalInfrastructureOverview
               loading={globalLoading}
@@ -267,7 +268,6 @@ const Organizations = () => {
           <TabsContent value="organization" className="space-y-4 mt-4">
             {!selectedOrg ? (
               <>
-                {/* Placeholder where summary cards used to be */}
                 <Card className="p-6 border-border/50 bg-card/50">
                   <div className="flex items-center gap-3 mb-2">
                     <Building2 className="w-5 h-5 text-primary" />
