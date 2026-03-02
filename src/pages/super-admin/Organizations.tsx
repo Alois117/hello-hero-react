@@ -9,7 +9,6 @@ import {
   useOrganizations,
   useOrganizationMetrics,
   useGlobalInfrastructureMetrics,
-  type GlobalScope,
   type GlobalTimeRange,
   type Organization,
 } from "@/hooks/super-admin/organizations";
@@ -35,7 +34,7 @@ import {
   ToggleOrganizationDialog,
 } from "@/components/super-admin/organizations/OrganizationManagementDialogs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -79,9 +78,8 @@ const Organizations = () => {
   const [togglingOrg, setTogglingOrg] = useState<KeycloakOrganization | null>(null);
   const [activeView, setActiveView] = useState<"global" | "organization">("global");
 
-  // Global filters
-  const [globalScope, setGlobalScope] = useState<GlobalScope>("all");
-  const [globalSelectedOrgIds, setGlobalSelectedOrgIds] = useState<string[]>([]);
+  // Global filters — simplified: no dual scope, just optional org filter
+  const [globalSelectedOrgId, setGlobalSelectedOrgId] = useState<string | null>(null);
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalTimeRange, setGlobalTimeRange] = useState<GlobalTimeRange>("all");
   const [globalCustomDateFrom, setGlobalCustomDateFrom] = useState<Date | undefined>(undefined);
@@ -109,30 +107,22 @@ const Organizations = () => {
     [keycloakOrganizations]
   );
 
-  // Keep selected org IDs in sync with existing organizations
+  // Keep selected org ID valid
   useEffect(() => {
-    const validOrgIds = new Set(globalOrganizations.map((org) => org.id));
-    setGlobalSelectedOrgIds((prev) => prev.filter((id) => validOrgIds.has(id)));
-  }, [globalOrganizations]);
+    if (globalSelectedOrgId && !globalOrganizations.find((o) => o.id === globalSelectedOrgId)) {
+      setGlobalSelectedOrgId(null);
+    }
+  }, [globalOrganizations, globalSelectedOrgId]);
 
-  // Enforce single selection for specific scope
-  useEffect(() => {
-    if (globalScope !== "specific") return;
-    if (globalSelectedOrgIds.length > 1) {
-      setGlobalSelectedOrgIds(globalSelectedOrgIds.slice(0, 1));
-      return;
-    }
-    if (globalSelectedOrgIds.length === 0 && globalOrganizations.length > 0) {
-      setGlobalSelectedOrgIds([globalOrganizations[0].id]);
-    }
-  }, [globalScope, globalSelectedOrgIds, globalOrganizations]);
-  
+  // Derive scope + selectedOrgIds from simplified state
+  const globalScope = globalSelectedOrgId ? "specific" as const : "all" as const;
+  const globalSelectedOrgIds = globalSelectedOrgId ? [globalSelectedOrgId] : [];
+
   const {
     loading: globalLoading,
     error: globalError,
     isConnected: globalConnected,
     lastUpdated: globalLastUpdated,
-    refresh: refreshGlobalMetrics,
     summary: globalSummary,
     alerts: globalAlerts,
     hosts: globalHosts,
@@ -240,10 +230,8 @@ const Organizations = () => {
           <TabsContent value="global" className="space-y-4 mt-4">
             <GlobalInfrastructureFilterBar
               organizations={globalOrganizations}
-              scope={globalScope}
-              onScopeChange={setGlobalScope}
-              selectedOrgIds={globalSelectedOrgIds}
-              onSelectedOrgIdsChange={setGlobalSelectedOrgIds}
+              selectedOrgId={globalSelectedOrgId}
+              onSelectedOrgIdChange={setGlobalSelectedOrgId}
               timeRange={globalTimeRange}
               onTimeRangeChange={setGlobalTimeRange}
               customDateFrom={globalCustomDateFrom}
@@ -253,6 +241,9 @@ const Organizations = () => {
               searchQuery={globalSearchQuery}
               onSearchQueryChange={setGlobalSearchQuery}
             />
+
+            {/* Summary Cards — moved here from Organization Explorer */}
+            <OrganizationsSummaryCards counts={counts} alerts={globalAlerts} />
 
             <GlobalInfrastructureOverview
               loading={globalLoading}
@@ -270,14 +261,22 @@ const Organizations = () => {
               insightsBreakdown={insightsBreakdown}
               veeamBreakdown={veeamBreakdown}
               organizationSearchQuery={globalSearchQuery}
-              onRefresh={refreshGlobalMetrics}
             />
           </TabsContent>
 
           <TabsContent value="organization" className="space-y-4 mt-4">
             {!selectedOrg ? (
               <>
-                <OrganizationsSummaryCards counts={counts} />
+                {/* Placeholder where summary cards used to be */}
+                <Card className="p-6 border-border/50 bg-card/50">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Building2 className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold">List of All Organizations / Clients</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Browse and manage individual tenant organizations. Click on an organization to view detailed metrics and drilldown data.
+                  </p>
+                </Card>
 
                 <Card className="p-4 border-border/50">
                   <OrganizationsFilters

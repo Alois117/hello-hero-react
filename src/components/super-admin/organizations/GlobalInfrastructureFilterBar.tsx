@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, SlidersHorizontal, X, Calendar as CalendarIcon } from "lucide-react";
+import { Search, X, Calendar as CalendarIcon, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,21 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import type {
-  GlobalScope,
   GlobalTimeRange,
 } from "@/hooks/super-admin/organizations/useGlobalInfrastructureMetrics";
 import type { Organization } from "@/hooks/super-admin/organizations";
@@ -33,10 +24,8 @@ import { format } from "date-fns";
 
 interface GlobalInfrastructureFilterBarProps {
   organizations: Organization[];
-  scope: GlobalScope;
-  onScopeChange: (scope: GlobalScope) => void;
-  selectedOrgIds: string[];
-  onSelectedOrgIdsChange: (orgIds: string[]) => void;
+  selectedOrgId: string | null;
+  onSelectedOrgIdChange: (orgId: string | null) => void;
   timeRange: GlobalTimeRange;
   onTimeRangeChange: (timeRange: GlobalTimeRange) => void;
   customDateFrom?: Date;
@@ -56,13 +45,12 @@ const TIME_RANGE_OPTIONS: Array<{ label: string; value: GlobalTimeRange }> = [
 ];
 
 const SEARCH_DEBOUNCE_MS = 300;
+const DEFAULT_VISIBLE_ORGS = 20;
 
 const GlobalInfrastructureFilterBar = ({
   organizations,
-  scope,
-  onScopeChange,
-  selectedOrgIds,
-  onSelectedOrgIdsChange,
+  selectedOrgId,
+  onSelectedOrgIdChange,
   timeRange,
   onTimeRangeChange,
   customDateFrom,
@@ -73,6 +61,7 @@ const GlobalInfrastructureFilterBar = ({
   onSearchQueryChange,
 }: GlobalInfrastructureFilterBarProps) => {
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [orgFilterSearch, setOrgFilterSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -89,34 +78,35 @@ const GlobalInfrastructureFilterBar = ({
     return () => clearTimeout(debounceRef.current);
   }, [localSearch, searchQuery, onSearchQueryChange]);
 
-  const selectedCount = selectedOrgIds.length;
-  const selectedOrgLabel = useMemo(() => {
-    if (scope === "specific") {
-      const selected = organizations.find((org) => org.id === selectedOrgIds[0]);
-      return selected?.name ?? "Select organization";
-    }
-    if (selectedCount === 0) return "All organizations";
-    if (selectedCount === 1) {
-      const selected = organizations.find((org) => org.id === selectedOrgIds[0]);
-      return selected?.name ?? "1 selected";
-    }
-    return `${selectedCount} selected`;
-  }, [scope, organizations, selectedOrgIds, selectedCount]);
+  // Filter and limit organizations shown in the selector
+  const visibleOrgs = useMemo(() => {
+    const q = orgFilterSearch.trim().toLowerCase();
+    const filtered = q
+      ? organizations.filter((org) => org.name.toLowerCase().includes(q))
+      : organizations;
+    return filtered.slice(0, DEFAULT_VISIBLE_ORGS);
+  }, [organizations, orgFilterSearch]);
+
+  const selectedOrgName = useMemo(() => {
+    if (!selectedOrgId) return null;
+    return organizations.find((o) => o.id === selectedOrgId)?.name ?? null;
+  }, [selectedOrgId, organizations]);
 
   const hasActiveFilters =
-    selectedOrgIds.length > 0 ||
+    selectedOrgId !== null ||
     timeRange !== "all" ||
     Boolean(customDateFrom) ||
     Boolean(customDateTo) ||
     localSearch.length > 0;
 
   const clearFilters = () => {
-    onSelectedOrgIdsChange([]);
+    onSelectedOrgIdChange(null);
     onTimeRangeChange("all");
     onCustomDateFromChange(undefined);
     onCustomDateToChange(undefined);
     setLocalSearch("");
     onSearchQueryChange("");
+    setOrgFilterSearch("");
   };
 
   return (
@@ -133,64 +123,69 @@ const GlobalInfrastructureFilterBar = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={scope} onValueChange={(value) => onScopeChange(value as GlobalScope)}>
-            <SelectTrigger className="w-[210px] bg-background/60">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Organizations</SelectItem>
-              <SelectItem value="specific">Specific Organization</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {scope === "specific" ? (
-            <Select
-              value={selectedOrgIds[0] ?? ""}
-              onValueChange={(value) => onSelectedOrgIdsChange(value ? [value] : [])}
-            >
-              <SelectTrigger className="w-[240px] bg-background/60">
-                <SelectValue placeholder="Select organization" />
-              </SelectTrigger>
-              <SelectContent>
-                {organizations.map((org) => (
-                  <SelectItem key={org.id} value={org.id}>
-                    {org.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 bg-background/60 min-w-[240px] justify-between">
-                  <span className="truncate">{selectedOrgLabel}</span>
-                  <SlidersHorizontal className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[280px]" align="start">
-                <DropdownMenuLabel>Organizations</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {organizations.map((org) => {
-                  const checked = selectedOrgIds.includes(org.id);
-                  return (
-                    <DropdownMenuCheckboxItem
+          {/* Single organization selector with typeahead */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 bg-background/60 min-w-[240px] justify-between">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <span className="truncate flex-1 text-left">
+                  {selectedOrgName ?? "All Organizations"}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-2" align="start">
+              <div className="space-y-2">
+                <Input
+                  value={orgFilterSearch}
+                  onChange={(e) => setOrgFilterSearch(e.target.value)}
+                  placeholder="Search organizations..."
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+                <div className="max-h-[280px] overflow-y-auto space-y-0.5">
+                  <button
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                      !selectedOrgId
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "hover:bg-muted/60"
+                    }`}
+                    onClick={() => {
+                      onSelectedOrgIdChange(null);
+                      setOrgFilterSearch("");
+                    }}
+                  >
+                    All Organizations
+                  </button>
+                  {visibleOrgs.map((org) => (
+                    <button
                       key={org.id}
-                      checked={checked}
-                      onCheckedChange={(nextChecked) => {
-                        if (nextChecked) {
-                          onSelectedOrgIdsChange(Array.from(new Set([...selectedOrgIds, org.id])));
-                        } else {
-                          onSelectedOrgIdsChange(selectedOrgIds.filter((id) => id !== org.id));
-                        }
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        selectedOrgId === org.id
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/60"
+                      }`}
+                      onClick={() => {
+                        onSelectedOrgIdChange(org.id);
+                        setOrgFilterSearch("");
                       }}
                     >
-                      {org.name}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                      <span className="truncate block">{org.name}</span>
+                    </button>
+                  ))}
+                  {orgFilterSearch && visibleOrgs.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-3 py-2">
+                      No organizations found
+                    </p>
+                  )}
+                  {!orgFilterSearch && organizations.length > DEFAULT_VISIBLE_ORGS && (
+                    <p className="text-xs text-muted-foreground px-3 py-1">
+                      Showing {DEFAULT_VISIBLE_ORGS} of {organizations.length} — type to search
+                    </p>
+                  )}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <Select
             value={timeRange}
