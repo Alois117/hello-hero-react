@@ -287,7 +287,7 @@ const VeeamMetricsDrilldown = ({
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as VeeamSectionTab)} className="w-full">
         <TabsList className="w-full justify-start bg-muted/30 p-1 flex-wrap">
           <TabsTrigger value="backup" className="gap-2 text-xs sm:text-sm">
             <HardDrive className="w-4 h-4" />
@@ -646,7 +646,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
                       <div>
                         <p className="font-medium text-sm">{String(alertRecord.message ?? "")}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatDateTime(alertRecord.timestamp as string | number | Date | undefined)}
+                          {formatDateTime(String(alertRecord.timestamp ?? ""))}
                         </p>
                       </div>
                     </div>
@@ -672,7 +672,7 @@ function BackupReplicationTab({ hook }: { hook: ReturnType<typeof useOrganizatio
                       <div>
                         <p className="font-medium text-sm">{String(alertRecord.message ?? "")}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatDateTime(alertRecord.timestamp as string | number | Date | undefined)}
+                          {formatDateTime(String(alertRecord.timestamp ?? ""))}
                         </p>
                       </div>
                     </div>

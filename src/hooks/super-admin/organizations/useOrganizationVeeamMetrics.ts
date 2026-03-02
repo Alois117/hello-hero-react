@@ -488,7 +488,7 @@ export const useOrganizationVeeamMetrics = (
               setBrData({
                 summary: mainObj.summary ?? null,
                 matched,
-                alerts: mainObj.alerts ?? null,
+                alerts: (mainObj.alerts as BackupReplicationData["alerts"]) ?? { warnings: [], critical: [] },
                 statistics: mainObj.statistics ?? null,
                 vmsWithoutJobs,
                 jobsWithoutVMs,
@@ -529,7 +529,7 @@ export const useOrganizationVeeamMetrics = (
                 )
               );
 
-              setInfraVMs(vms);
+              setInfraVMs(vms as InfraVM[]);
             } else {
               setInfraVMs([]);
             }
@@ -658,14 +658,14 @@ export const useOrganizationVeeamMetrics = (
   // ── Computed: Summary ──
   const summary = useMemo<VeeamMetricsSummary>(() => {
     const br = effectiveBrData;
-    const brSummary = br?.summary;
+    const brSummaryRec = (br?.summary && typeof br.summary === "object" ? br.summary : {}) as Record<string, unknown>;
 
     return {
-      totalVMs: brSummary?.overview?.totalVMs ?? br?.matched?.length ?? 0,
-      protectedVMs: brSummary?.protection?.protectedVMs ?? br?.matched?.filter((m) => m.vm?.isProtected).length ?? 0,
-      unprotectedVMs: brSummary?.protection?.unprotectedVMs ?? br?.vmsWithoutJobs?.length ?? 0,
-      totalJobs: brSummary?.overview?.totalJobs ?? br?.matched?.reduce((acc, m) => acc + (m.jobs?.length ?? 0), 0) ?? 0,
-      staleBackups: brSummary?.backupHealth?.staleBackups ?? 0,
+      totalVMs: (brSummaryRec.overview as Record<string, unknown>)?.totalVMs as number ?? br?.matched?.length ?? 0,
+      protectedVMs: (brSummaryRec.protection as Record<string, unknown>)?.protectedVMs as number ?? br?.matched?.filter((m) => m.vm?.isProtected).length ?? 0,
+      unprotectedVMs: (brSummaryRec.protection as Record<string, unknown>)?.unprotectedVMs as number ?? br?.vmsWithoutJobs?.length ?? 0,
+      totalJobs: (brSummaryRec.overview as Record<string, unknown>)?.totalJobs as number ?? br?.matched?.reduce((acc, m) => acc + (m.jobs?.length ?? 0), 0) ?? 0,
+      staleBackups: ((brSummaryRec.backupHealth as Record<string, unknown>)?.staleBackups as number) ?? 0,
       activeAlerts: effectiveAlarmItems.filter((a) => a.status === "Active").length,
       infraVMs: effectiveInfraVMs.length,
       infraPoweredOn: effectiveInfraVMs.filter(

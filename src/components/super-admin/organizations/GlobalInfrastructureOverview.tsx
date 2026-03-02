@@ -7,14 +7,22 @@ import {
   ChevronDown,
   FileText,
   HardDrive,
-  RefreshCw,
   Server,
   XCircle,
+  Search,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   type CategoryBreakdownRow,
   type GlobalAlertItem,
@@ -59,7 +67,6 @@ interface GlobalInfrastructureOverviewProps {
   insightsBreakdown: CategoryBreakdownRow[];
   veeamBreakdown: CategoryBreakdownRow[];
   organizationSearchQuery: string;
-  onRefresh: () => void;
 }
 
 interface ClickableMetricCardProps {
@@ -73,6 +80,7 @@ interface ClickableMetricCardProps {
 }
 
 const BREAKDOWN_PAGE_SIZE = 8;
+const SUMMARY_TABLE_PAGE_SIZE = 8;
 
 const ClickableMetricCard = ({
   title,
@@ -113,6 +121,17 @@ const ClickableMetricCard = ({
   </Card>
 );
 
+// ── Global Summary Table ────────────────────────────────────────────────────
+interface SummaryTableRow {
+  id: string;
+  component: string;
+  total: number;
+  detail1Label: string;
+  detail1Value: number;
+  detail2Label: string;
+  detail2Value: number;
+}
+
 const GlobalInfrastructureOverview = ({
   loading,
   error,
@@ -129,7 +148,6 @@ const GlobalInfrastructureOverview = ({
   insightsBreakdown,
   veeamBreakdown,
   organizationSearchQuery,
-  onRefresh,
 }: GlobalInfrastructureOverviewProps) => {
   const [selectedCategory, setSelectedCategory] = useState<GlobalCardCategory | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -140,18 +158,21 @@ const GlobalInfrastructureOverview = ({
   const [reportsDetailsRequested, setReportsDetailsRequested] = useState(false);
   const [activeVeeamSection, setActiveVeeamSection] = useState<VeeamSectionTab>("backup");
 
+  // Summary table state
+  const [summaryTableSearch, setSummaryTableSearch] = useState("");
+  const [summaryTablePage, setSummaryTablePage] = useState(1);
+
   useEffect(() => {
     setBreakdownPage(1);
   }, [selectedCategory, organizationSearchQuery]);
 
-  // ✅ FIX: request details + immediately refetch so report list populates right away
+  // Request details when reports drilldown is opened
   useEffect(() => {
     if (selectedCategory !== "reports") return;
     if (reportsDetailsRequested) return;
     requestGlobalReportsDetails();
     setReportsDetailsRequested(true);
-    onRefresh(); // important to populate details immediately
-  }, [selectedCategory, reportsDetailsRequested, onRefresh]);
+  }, [selectedCategory, reportsDetailsRequested]);
 
   const handleCardClick = (category: GlobalCardCategory) => {
     setSelectedCategory((prev) => (prev === category ? null : category));
@@ -162,6 +183,74 @@ const GlobalInfrastructureOverview = ({
     setDrawerOpen(false);
   };
 
+  // ── Summary Table Data ──
+  const summaryTableRows = useMemo<SummaryTableRow[]>(() => {
+    const rows: SummaryTableRow[] = [
+      {
+        id: "alerts",
+        component: "Alerts",
+        total: summary.alerts.total,
+        detail1Label: "Active",
+        detail1Value: summary.alerts.active,
+        detail2Label: "Critical",
+        detail2Value: summary.alerts.critical,
+      },
+      {
+        id: "hosts",
+        component: "Hosts",
+        total: summary.hosts.total,
+        detail1Label: "Enabled",
+        detail1Value: summary.hosts.enabled,
+        detail2Label: "Disabled",
+        detail2Value: summary.hosts.disabled,
+      },
+      {
+        id: "reports",
+        component: "Reports",
+        total: summary.reports.total,
+        detail1Label: "Daily",
+        detail1Value: summary.reports.daily,
+        detail2Label: "Weekly",
+        detail2Value: summary.reports.weekly,
+      },
+      {
+        id: "insights",
+        component: "AI Insights",
+        total: summary.insights.total,
+        detail1Label: "Predictions",
+        detail1Value: summary.insights.predictions,
+        detail2Label: "Anomalies",
+        detail2Value: summary.insights.anomalies,
+      },
+      {
+        id: "veeam",
+        component: "Veeam Jobs",
+        total: summary.veeam.jobs,
+        detail1Label: "Success",
+        detail1Value: summary.veeam.success,
+        detail2Label: "Failed",
+        detail2Value: summary.veeam.failed,
+      },
+    ];
+
+    const q = summaryTableSearch.trim().toLowerCase();
+    if (q) {
+      return rows.filter((r) => r.component.toLowerCase().includes(q));
+    }
+    return rows;
+  }, [summary, summaryTableSearch]);
+
+  const summaryTableTotalPages = Math.max(1, Math.ceil(summaryTableRows.length / SUMMARY_TABLE_PAGE_SIZE));
+  const paginatedSummaryRows = useMemo(() => {
+    const start = (summaryTablePage - 1) * SUMMARY_TABLE_PAGE_SIZE;
+    return summaryTableRows.slice(start, start + SUMMARY_TABLE_PAGE_SIZE);
+  }, [summaryTableRows, summaryTablePage]);
+
+  useEffect(() => {
+    setSummaryTablePage(1);
+  }, [summaryTableSearch]);
+
+  // ── Breakdown meta ──
   const breakdownMeta = useMemo(() => {
     const query = organizationSearchQuery.trim().toLowerCase();
     const filterRows = (rows: CategoryBreakdownRow[]) =>
@@ -298,18 +387,16 @@ const GlobalInfrastructureOverview = ({
     [loading, selectedCategory, reportsDetailsRequested, summary.reports.total, reports.length]
   );
 
+  // no-op refresh for child components that require it
+  const noop = () => {};
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Global Infrastructure Overview</h2>
-          <p className="text-sm text-muted-foreground">
-            Aggregated metrics across the selected organizations
-          </p>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+      <div>
+        <h2 className="text-xl font-bold">Global Infrastructure Overview</h2>
+        <p className="text-sm text-muted-foreground">
+          Aggregated metrics across the selected organizations
+        </p>
       </div>
 
       {error && (
@@ -418,12 +505,79 @@ const GlobalInfrastructureOverview = ({
               </div>
               <div>
                 <p className="text-muted-foreground">Jobs</p>
-                <p className="text-xl font-bold">{veeamJobs?.length || "—"}</p>   {/* ← safe access */}
+                <p className="text-xl font-bold">{veeamJobs?.length || "—"}</p>
               </div>
             </div>
           </div>
         </ClickableMetricCard>
       </div>
+
+      {/* Global Summary Table */}
+      <Card className="p-4 border-border/50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h4 className="font-semibold">Global Components Summary</h4>
+          <div className="relative max-w-xs">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              value={summaryTableSearch}
+              onChange={(e) => setSummaryTableSearch(e.target.value)}
+              placeholder="Search components..."
+              className="pl-9 h-8 text-sm bg-muted/30"
+            />
+          </div>
+        </div>
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full rounded" />
+            ))}
+          </div>
+        ) : summaryTableRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            No components match your search.
+          </p>
+        ) : (
+          <>
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Component</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Detail 1</TableHead>
+                    <TableHead className="text-right">Detail 2</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedSummaryRows.map((row) => (
+                    <TableRow key={row.id} className="border-t border-border/40">
+                      <TableCell className="font-medium">{row.component}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className="text-muted-foreground text-xs mr-1">{row.detail1Label}:</span>
+                        {row.detail1Value}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className="text-muted-foreground text-xs mr-1">{row.detail2Label}:</span>
+                        {row.detail2Value}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination
+              currentPage={summaryTablePage}
+              totalPages={summaryTableTotalPages}
+              totalItems={summaryTableRows.length}
+              startIndex={(summaryTablePage - 1) * SUMMARY_TABLE_PAGE_SIZE}
+              endIndex={Math.min(summaryTablePage * SUMMARY_TABLE_PAGE_SIZE, summaryTableRows.length)}
+              itemName="components"
+              onPageChange={setSummaryTablePage}
+            />
+          </>
+        )}
+      </Card>
 
       <Collapsible open={selectedCategory !== null}>
         <CollapsibleContent className="animate-accordion-down">
@@ -434,8 +588,8 @@ const GlobalInfrastructureOverview = ({
                   orgName="Selected Organizations"
                   alerts={{ items: alerts, loading, error: null }}
                   hosts={{ items: hosts, loading, error: null }}
-                  onRefreshAlerts={onRefresh}
-                  onRefreshHosts={onRefresh}
+                  onRefreshAlerts={noop}
+                  onRefreshHosts={noop}
                   onItemClick={(item) => {
                     setSelectedItem(item);
                     setDrawerOpen(true);
@@ -449,7 +603,7 @@ const GlobalInfrastructureOverview = ({
                   reports={reports}
                   loading={reportsLoading}
                   error={null}
-                  onRefresh={onRefresh}
+                  onRefresh={noop}
                   onItemClick={(item) => {
                     setSelectedItem(item);
                     setDrawerOpen(true);
@@ -463,7 +617,7 @@ const GlobalInfrastructureOverview = ({
                   insights={insights}
                   loading={loading}
                   error={null}
-                  onRefresh={onRefresh}
+                  onRefresh={noop}
                 />
               )}
 
@@ -472,7 +626,7 @@ const GlobalInfrastructureOverview = ({
                   orgName="Selected Organizations"
                   preloadedData={{
                     ...veeamDrilldownData,
-                    onRefresh,
+                    onRefresh: noop,
                   }}
                   onSectionChange={setActiveVeeamSection}
                 />
@@ -488,26 +642,26 @@ const GlobalInfrastructureOverview = ({
                   ) : (
                     <>
                       <div className="rounded-lg border border-border/50 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/40">
-                            <tr>
-                              <th className="text-left p-3 font-medium">Organization</th>
-                              <th className="text-right p-3 font-medium">Total</th>
-                              <th className="text-right p-3 font-medium">{breakdownMeta.secondaryLabel}</th>
-                              <th className="text-right p-3 font-medium">{breakdownMeta.tertiaryLabel}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/40">
+                              <TableHead className="font-medium">Organization</TableHead>
+                              <TableHead className="text-right font-medium">Total</TableHead>
+                              <TableHead className="text-right font-medium">{breakdownMeta.secondaryLabel}</TableHead>
+                              <TableHead className="text-right font-medium">{breakdownMeta.tertiaryLabel}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                             {paginatedBreakdown.map((row) => (
-                              <tr key={row.organizationId} className="border-t border-border/40">
-                                <td className="p-3">{row.organizationName}</td>
-                                <td className="p-3 text-right tabular-nums">{row.total}</td>
-                                <td className="p-3 text-right tabular-nums">{row.secondary}</td>
-                                <td className="p-3 text-right tabular-nums">{row.tertiary}</td>
-                              </tr>
+                              <TableRow key={row.organizationId} className="border-t border-border/40">
+                                <TableCell>{row.organizationName}</TableCell>
+                                <TableCell className="text-right tabular-nums">{row.total}</TableCell>
+                                <TableCell className="text-right tabular-nums">{row.secondary}</TableCell>
+                                <TableCell className="text-right tabular-nums">{row.tertiary}</TableCell>
+                              </TableRow>
                             ))}
-                          </tbody>
-                        </table>
+                          </TableBody>
+                        </Table>
                       </div>
 
                       <TablePagination
