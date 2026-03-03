@@ -37,7 +37,8 @@ import {
   VeeamJobItem,
   UserItem,
 } from "@/hooks/super-admin/organizations/useOrganizationDetails";
-import { ReportsDrilldown, InsightsDrilldown, UsersDrilldown } from "./drilldown";
+import { ReportsDrilldown, UsersDrilldown } from "./drilldown";
+import SuperAdminInsightsView from "./ai-insights/SuperAdminInsightsView";
 import ZabbixMetricsDrilldown from "./drilldown/ZabbixMetricsDrilldown";
 import VeeamMetricsDrilldown from "./VeeamMetricsDrilldown";
 import { DrilldownDetailDrawer } from "./drilldown/detail";
@@ -225,12 +226,11 @@ const OrganizationDetailView = ({
         );
       case "insights":
         return (
-          <InsightsDrilldown
-            orgName={organization.name}
+          <SuperAdminInsightsView
+            contextLabel={organization.name}
             insights={insights.items}
             loading={insights.loading}
             error={insights.error}
-            onRefresh={handleRefreshCategory}
           />
         );
       case "veeam":
