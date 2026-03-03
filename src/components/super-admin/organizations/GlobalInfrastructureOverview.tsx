@@ -45,7 +45,7 @@ import type {
 import TablePagination from "@/components/ui/table-pagination";
 import ZabbixMetricsDrilldown from "./drilldown/ZabbixMetricsDrilldown";
 import ReportsDrilldown from "./drilldown/ReportsDrilldown";
-import InsightsDrilldown from "./drilldown/InsightsDrilldown";
+import SuperAdminInsightsView from "./ai-insights/SuperAdminInsightsView";
 import VeeamMetricsDrilldown, { type VeeamSectionTab } from "./VeeamMetricsDrilldown";
 import { DrilldownDetailDrawer } from "./drilldown/detail";
 
@@ -72,7 +72,6 @@ interface GlobalInfrastructureOverviewProps {
 interface ClickableMetricCardProps {
   title: string;
   icon: React.ElementType;
-  loading: boolean;
   iconColor?: string;
   isSelected: boolean;
   onClick: () => void;
@@ -85,7 +84,6 @@ const SUMMARY_TABLE_PAGE_SIZE = 8;
 const ClickableMetricCard = ({
   title,
   icon: Icon,
-  loading,
   iconColor = "text-primary",
   isSelected,
   onClick,
@@ -110,14 +108,7 @@ const ClickableMetricCard = ({
         }`}
       />
     </div>
-    {loading ? (
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-20" />
-        <Skeleton className="h-4 w-32" />
-      </div>
-    ) : (
-      children
-    )}
+    {children}
   </Card>
 );
 
@@ -409,7 +400,6 @@ const GlobalInfrastructureOverview = ({
         <ClickableMetricCard
           title="Zabbix Metrics"
           icon={Activity}
-          loading={loading}
           iconColor="text-primary"
           isSelected={selectedCategory === "zabbix_metrics"}
           onClick={() => handleCardClick("zabbix_metrics")}
@@ -453,7 +443,6 @@ const GlobalInfrastructureOverview = ({
         <ClickableMetricCard
           title="Reports"
           icon={FileText}
-          loading={reportsLoading}
           iconColor="text-secondary"
           isSelected={selectedCategory === "reports"}
           onClick={() => handleCardClick("reports")}
@@ -471,7 +460,6 @@ const GlobalInfrastructureOverview = ({
         <ClickableMetricCard
           title="AI Insights"
           icon={Brain}
-          loading={loading}
           iconColor="text-accent"
           isSelected={selectedCategory === "insights"}
           onClick={() => handleCardClick("insights")}
@@ -488,7 +476,6 @@ const GlobalInfrastructureOverview = ({
         <ClickableMetricCard
           title="Veeam Metrics"
           icon={HardDrive}
-          loading={loading}
           iconColor="text-success"
           isSelected={selectedCategory === "veeam"}
           onClick={() => handleCardClick("veeam")}
@@ -512,7 +499,8 @@ const GlobalInfrastructureOverview = ({
         </ClickableMetricCard>
       </div>
 
-      {/* Global Summary Table */}
+      {/* Global Summary Table — only visible when no drilldown is active */}
+      {selectedCategory === null && (
       <Card className="p-4 border-border/50">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h4 className="font-semibold">Global Components Summary</h4>
@@ -526,7 +514,7 @@ const GlobalInfrastructureOverview = ({
             />
           </div>
         </div>
-        {loading ? (
+        {loading && summaryTableRows.length === 0 ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full rounded" />
@@ -578,6 +566,7 @@ const GlobalInfrastructureOverview = ({
           </>
         )}
       </Card>
+      )}
 
       <Collapsible open={selectedCategory !== null}>
         <CollapsibleContent className="animate-accordion-down">
@@ -612,12 +601,11 @@ const GlobalInfrastructureOverview = ({
               )}
 
               {selectedCategory === "insights" && (
-                <InsightsDrilldown
-                  orgName="Selected Organizations"
+                <SuperAdminInsightsView
+                  contextLabel="Selected Organizations"
                   insights={insights}
                   loading={loading}
                   error={null}
-                  onRefresh={noop}
                 />
               )}
 

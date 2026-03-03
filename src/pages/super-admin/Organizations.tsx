@@ -12,6 +12,7 @@ import {
   type GlobalTimeRange,
   type Organization,
 } from "@/hooks/super-admin/organizations";
+import { useKeycloakMemberCounts } from "@/hooks/keycloak/useKeycloakMemberCounts";
 import {
   useKeycloakOrganizations,
   type KeycloakOrganization,
@@ -82,6 +83,13 @@ const Organizations = () => {
   const [globalTimeRange, setGlobalTimeRange] = useState<GlobalTimeRange>("all");
   const [globalCustomDateFrom, setGlobalCustomDateFrom] = useState<Date | undefined>(undefined);
   const [globalCustomDateTo, setGlobalCustomDateTo] = useState<Date | undefined>(undefined);
+
+  // Fetch member counts for all orgs
+  const allOrgIds = useMemo(() => keycloakOrganizations.map((o) => o.id), [keycloakOrganizations]);
+  const { totalUsers: globalTotalUsers } = useKeycloakMemberCounts({
+    orgIds: allOrgIds,
+    enabled: true,
+  });
 
   const globalOrganizations = useMemo<Organization[]>(
     () =>
@@ -227,7 +235,7 @@ const Organizations = () => {
           ──────────────────────────────────────────────── */}
           {activeView === "global" && (
             <div className="mt-5 mb-6">
-              <OrganizationsSummaryCards counts={counts} alerts={globalAlerts} />
+              <OrganizationsSummaryCards counts={{ ...counts, totalUsers: globalTotalUsers }} alerts={globalAlerts} />
             </div>
           )}
 
