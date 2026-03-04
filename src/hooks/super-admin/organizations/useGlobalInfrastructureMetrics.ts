@@ -1379,11 +1379,11 @@ export const useGlobalInfrastructureMetrics = ({
       infraVMs: filteredVeeam.infraVMs,
       alarmItems: filteredVeeam.alarmItems,
       sectionBreakdowns: veeamAggregates.sectionBreakdowns,
-      loading,
+      loading: initialLoading,
       error,
       lastUpdated,
     }),
-    [filteredVeeam, veeamAggregates, loading, error, lastUpdated]
+    [filteredVeeam, veeamAggregates, initialLoading, error, lastUpdated]
   );
 
   const summary = useMemo<GlobalMetricSummary>(
