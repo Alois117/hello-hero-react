@@ -568,7 +568,7 @@ export const useGlobalInfrastructureMetrics = ({
           authenticatedFetch(WEBHOOK_VEEAM_ALARMS_URL, commonPost).catch(() => null),
         ]);
 
-        // Alerts parsing (unchanged)
+        // Alerts parsing — preserve previous data on silent refresh failure
         if (alertsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(alertsRes, WEBHOOK_ALERTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
@@ -595,12 +595,10 @@ export const useGlobalInfrastructureMetrics = ({
               };
             });
             setRawAlerts(mapped);
-          } else {
-            setRawAlerts([]);
           }
-        } else {
-          setRawAlerts([]);
+          // On parse failure during silent refresh, keep previous data (no else setRawAlerts([]))
         }
+        // On fetch failure during silent refresh, keep previous data
 
         // Hosts parsing (unchanged)
         if (hostsRes?.ok) {
