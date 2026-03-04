@@ -131,6 +131,78 @@ const inferSeverity = (value: unknown): string => {
 const asRecord = (value: unknown): UnknownRecord =>
   value && typeof value === "object" ? (value as UnknownRecord) : {};
 
+const safeString = (v: unknown): string => (typeof v === "string" ? v : "");
+
+const decodeCommonEntities = (s: string) =>
+  s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+const inferInsightType = (rawType: string, text: string): string => {
+  const t = (rawType || "").toLowerCase();
+  const blob = `${t} ${text}`.toLowerCase();
+  if (blob.includes("predict")) return "prediction";
+  if (blob.includes("anomal")) return "anomaly";
+  if (blob.includes("recommend")) return "recommendation";
+  return t || "insight";
+};
+
+const toDateOrUndefined = (value: unknown): Date | undefined => {
+  if (value == null || value === "") return undefined;
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : undefined;
+  }
+  if (typeof value === "number") {
+    const ms = value > 1_000_000_000_000 ? value : value * 1000;
+    const date = new Date(ms);
+    return Number.isFinite(date.getTime()) ? date : undefined;
+  }
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date : undefined;
+};
+
+const pickInsightTimestamp = (i: UnknownRecord): Date => {
+  const zbxRaw = asRecord(i.zbx_raw);
+  const rawEvent = asRecord(zbxRaw.raw_event);
+  const event = asRecord(i.event);
+
+  const clock =
+    i.clock ??
+    zbxRaw.clock ??
+    rawEvent.clock ??
+    event.clock ??
+    i.zabbix_clock ??
+    i.zabbixClock;
+
+  if (clock != null && Number.isFinite(Number(clock))) {
+    return new Date(Number(clock) * 1000);
+  }
+
+  return (
+    toDateOrUndefined(i.created_at ?? i.timestamp ?? i.time ?? i.updated_at ?? i.first_seen ?? i.last_seen_at) ??
+    new Date()
+  );
+};
+
+const getClientIdFromAny = (obj: UnknownRecord): number | null => {
+  const direct = toNumberOrNull(obj.client_id ?? obj.clientId);
+  if (direct != null) return direct;
+
+  const meta = asRecord(obj.meta);
+  const org = asRecord(obj.organization);
+  const nestedOrg = asRecord(obj.org);
+
+  return (
+    toNumberOrNull(meta.client_id ?? meta.clientId) ??
+    toNumberOrNull(org.client_id ?? org.clientId) ??
+    toNumberOrNull(nestedOrg.client_id ?? nestedOrg.clientId) ??
+    null
+  );
+};
+
 const extractReportsRecords = (value: unknown): UnknownRecord[] => {
   if (Array.isArray(value)) {
     return value.map(asRecord);
@@ -195,10 +267,10 @@ const extractReportId = (
 ): string =>
   String(
     record.id ??
-    record.report_id ??
-    record.uuid ??
-    record.guid ??
-    `${clientId ?? "na"}-${reportType}-${createdAtMs}-${fallbackIndex}`
+      record.report_id ??
+      record.uuid ??
+      record.guid ??
+      `${clientId ?? "na"}-${reportType}-${createdAtMs}-${fallbackIndex}`
   );
 
 const normalizeReportTemplate = (record: UnknownRecord): string | undefined => {
@@ -219,10 +291,10 @@ const mapReportRecord = (
   const id = extractReportId(record, index, reportType, createdAtMs, clientId);
   const name = String(
     record.name ??
-    record.title ??
-    record.report_name ??
-    record.reportTitle ??
-    `${reportType} report`
+      record.title ??
+      record.report_name ??
+      record.reportTitle ??
+      `${reportType} report`
   );
   const status = String(record.status ?? record.state ?? "completed");
   const createdAt = new Date(createdAtMs);
@@ -252,20 +324,6 @@ const mapReportRecord = (
       clientId,
     },
   };
-};
-
-const toDateOrUndefined = (value: unknown): Date | undefined => {
-  if (value == null || value === "") return undefined;
-  if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value : undefined;
-  }
-  if (typeof value === "number") {
-    const ms = value > 1_000_000_000_000 ? value : value * 1000;
-    const date = new Date(ms);
-    return Number.isFinite(date.getTime()) ? date : undefined;
-  }
-  const date = new Date(String(value));
-  return Number.isFinite(date.getTime()) ? date : undefined;
 };
 
 const extractClientIdFromBRPayload = (value: unknown): number | null => {
@@ -382,11 +440,11 @@ const getTimeCutoff = (
   const now = Date.now();
 
   if (timeRange === "all") {
-    return { from: undefined, to: undefined }; 
+    return { from: undefined, to: undefined };
   }
 
   if (timeRange === "24h") return { from: new Date(now - 24 * 60 * 60 * 1000), to: undefined };
-  if (timeRange === "7d")  return { from: new Date(now - 7 * 24 * 60 * 60 * 1000), to: undefined };
+  if (timeRange === "7d") return { from: new Date(now - 7 * 24 * 60 * 60 * 1000), to: undefined };
   if (timeRange === "30d") return { from: new Date(now - 30 * 24 * 60 * 60 * 1000), to: undefined };
 
   return { from: customDateFrom, to: customDateTo };
@@ -412,11 +470,8 @@ const getOrgScope = (
   selectedOrgIds: string[]
 ) => {
   if (scope === "specific") {
-    // ───────────────────────────────────────────────────────────────
     // CHANGED: previously limited to first org → now includes all selected
     return selectedOrgIds;
-    // If you want to keep single-org behavior in some views, consider
-    // renaming this scope or handling it in the calling component instead.
   }
   return selectedOrgIds;
 };
@@ -512,9 +567,7 @@ export const useGlobalInfrastructureMetrics = ({
           authenticatedFetch(WEBHOOK_VEEAM_ALARMS_URL, commonPost).catch(() => null),
         ]);
 
-        // ───────────────────────────────────────────────────────────────
         // Alerts parsing (unchanged)
-        // ───────────────────────────────────────────────────────────────
         if (alertsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(alertsRes, WEBHOOK_ALERTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
@@ -583,7 +636,7 @@ export const useGlobalInfrastructureMetrics = ({
           setRawHosts([]);
         }
 
-        // Reports parsing ────────────────────────────────────────────────
+        // Reports parsing (unchanged)
         if (reportsRes?.ok) {
           const parsed = await safeParseResponse<unknown>(reportsRes, WEBHOOK_REPORTS_URL);
           if (parsed.ok && parsed.data != null) {
@@ -617,26 +670,68 @@ export const useGlobalInfrastructureMetrics = ({
           setRawReportDetails([]);
         }
 
-        // Insights parsing (unchanged)
+        // ───────────────────────────────────────────────────────────────
+        // Insights parsing (UPDATED to match Organization Explorer richness)
+        // ───────────────────────────────────────────────────────────────
         if (insightsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(insightsRes, WEBHOOK_AI_INSIGHTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
             const mapped: GlobalInsightItem[] = parsed.data.map((entry, index) => {
               const item = asRecord(entry);
-              const meta = asRecord(item.meta);
-              const clientId = toNumberOrNull(
-                item.client_id ?? item.clientId ?? meta.client_id ?? meta.clientId
-              );
-              const effectiveClientId = clientId ?? toNumberOrNull(meta.client_id ?? meta.clientId);
+
+              // Resolve clientId robustly (direct + nested)
+              const effectiveClientId = getClientIdFromAny(item);
+
               const org = effectiveClientId ? orgMapByClientId.get(effectiveClientId) : undefined;
-              const timestampValue = item.created_at ?? item.timestamp ?? item.time;
-              const timestamp = toDateOrUndefined(timestampValue) ?? new Date();
+
+              // Title (fallbacks similar to org hook)
+              const titleRaw =
+                safeString(item.title) ||
+                safeString(item.name) ||
+                safeString(item.problem_name) ||
+                safeString(asRecord(item.zbx_raw).problem_name) ||
+                "AI Insight";
+              const title = titleRaw.trim() || "AI Insight";
+
+              // Summary: include AI analysis fields that Global Overview was missing
+              const summaryRaw = String(
+                item.summary ??
+                  item.description ??
+                  item.message ??
+                  item.details ??
+                  item.first_ai_response ??
+                  item.response_content ??
+                  item.content ??
+                  ""
+              );
+
+              // Decode & keep as text (InsightCard renders as plain text)
+              const summary = decodeCommonEntities(summaryRaw).trim();
+
+              // Type inference (so badges match org explorer)
+              const rawType =
+                safeString(item.type) ||
+                safeString(item.insight_type) ||
+                safeString(item.category) ||
+                safeString(item.kind);
+              const computedType = inferInsightType(rawType, `${title} ${summary}`);
+
+              // Timestamp: support zabbix clock and standard fields
+              const timestamp = pickInsightTimestamp(item);
+
+              // Id: include more fallbacks
+              const id =
+                safeString(item.id).trim() ||
+                safeString(item.insight_id).trim() ||
+                safeString(item.ai_response_id).trim() ||
+                `global-insight-${effectiveClientId ?? "na"}-${computedType}-${timestamp.getTime()}-${index}`;
+
               return {
-                id: String(item?.id ?? item?.insight_id ?? `global-insight-${index}`),
-                type: String(item?.type ?? item?.insight_type ?? item?.category ?? "insight"),
-                title: String(item?.title ?? item?.name ?? "AI Insight"),
-                summary: String(item?.summary ?? item?.description ?? item?.message ?? ""),
-                severity: inferSeverity(item?.severity),
+                id,
+                type: computedType,
+                title,
+                summary,
+                severity: inferSeverity(item.severity ?? item.level ?? item.priority ?? ""),
                 timestamp,
                 client_id: effectiveClientId ?? undefined,
                 organizationId: org?.id ?? null,
@@ -644,6 +739,7 @@ export const useGlobalInfrastructureMetrics = ({
                 clientId: effectiveClientId,
               };
             });
+
             setRawInsights(mapped);
           } else {
             setRawInsights([]);
@@ -652,7 +748,7 @@ export const useGlobalInfrastructureMetrics = ({
           setRawInsights([]);
         }
 
-        // Veeam Backup & Replication parsing
+        // Veeam Backup & Replication parsing (unchanged)
         if (veeamBackupRes?.ok) {
           const parsed = await safeParseResponse<unknown>(
             veeamBackupRes,
@@ -698,14 +794,16 @@ export const useGlobalInfrastructureMetrics = ({
           setRawVeeamBackupData(null);
         }
 
-        // Veeam Infrastructure parsing
+        // Veeam Infrastructure parsing (unchanged)
         if (veeamInfraRes?.ok) {
           const parsed = await safeParseResponse<InfraVM[]>(
             veeamInfraRes,
             WEBHOOK_VEEAM_VMS_URL
           );
           if (parsed.ok && parsed.data) {
-            const vms = Array.isArray(parsed.data) ? parsed.data : [parsed.data as unknown as InfraVM];
+            const vms = Array.isArray(parsed.data)
+              ? parsed.data
+              : [parsed.data as unknown as InfraVM];
             setRawVeeamInfraVMs(vms);
           } else {
             setRawVeeamInfraVMs([]);
@@ -714,7 +812,7 @@ export const useGlobalInfrastructureMetrics = ({
           setRawVeeamInfraVMs([]);
         }
 
-        // Veeam Alarms parsing
+        // Veeam Alarms parsing (unchanged)
         if (veeamAlarmsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(
             veeamAlarmsRes,
@@ -783,7 +881,11 @@ export const useGlobalInfrastructureMetrics = ({
         setLastUpdated(new Date());
       } catch (err) {
         if (!(err instanceof Error && err.name === "AbortError")) {
-          setError(err instanceof Error ? err.message : "Failed to load global infrastructure metrics");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load global infrastructure metrics"
+          );
           setIsConnected(false);
         }
       } finally {
@@ -854,12 +956,17 @@ export const useGlobalInfrastructureMetrics = ({
   const alerts = useMemo(
     () =>
       rawAlerts.filter(
-        (item) => inScope(item.organizationId) && isWithinTimeRange(item.timestamp, rangeFrom, rangeTo)
+        (item) =>
+          inScope(item.organizationId) &&
+          isWithinTimeRange(item.timestamp, rangeFrom, rangeTo)
       ),
     [rawAlerts, inScope, rangeFrom, rangeTo]
   );
 
-  const hosts = useMemo(() => rawHosts.filter((item) => inScope(item.organizationId)), [rawHosts, inScope]);
+  const hosts = useMemo(
+    () => rawHosts.filter((item) => inScope(item.organizationId)),
+    [rawHosts, inScope]
+  );
 
   const filteredReportsMeta = useMemo(() => {
     const selectedIds = new Set<string>();
@@ -921,7 +1028,9 @@ export const useGlobalInfrastructureMetrics = ({
   const insights = useMemo(
     () =>
       rawInsights.filter(
-        (item) => inScope(item.organizationId) && isWithinTimeRange(item.timestamp, rangeFrom, rangeTo)
+        (item) =>
+          inScope(item.organizationId) &&
+          isWithinTimeRange(item.timestamp, rangeFrom, rangeTo)
       ),
     [rawInsights, inScope, rangeFrom, rangeTo]
   );
@@ -996,7 +1105,10 @@ export const useGlobalInfrastructureMetrics = ({
 
         if (filteredJobs.length === 0) continue;
 
-        const nextVm = { ...vmRecord, jobs: filteredJobs } as unknown as BackupReplicationData["matched"][number];
+        const nextVm = {
+          ...vmRecord,
+          jobs: filteredJobs,
+        } as unknown as BackupReplicationData["matched"][number];
         matched.push(nextVm);
 
         const vmJobs = mapVeeamJobFromMatchedEntry(nextVm, vmIndex, orgMapByClientId);
@@ -1052,23 +1164,13 @@ export const useGlobalInfrastructureMetrics = ({
 
       for (let index = 0; index < filteredOrphanJobs.length; index += 1) {
         jobs.push(
-          mapStandaloneVeeamJob(
-            filteredOrphanJobs[index],
-            index,
-            orgMapByClientId,
-            "Orphan Veeam Job"
-          )
+          mapStandaloneVeeamJob(filteredOrphanJobs[index], index, orgMapByClientId, "Orphan Veeam Job")
         );
       }
 
       for (let index = 0; index < filteredMultiVmJobs.length; index += 1) {
         jobs.push(
-          mapStandaloneVeeamJob(
-            filteredMultiVmJobs[index],
-            index,
-            orgMapByClientId,
-            "Multi-VM Veeam Job"
-          )
+          mapStandaloneVeeamJob(filteredMultiVmJobs[index], index, orgMapByClientId, "Multi-VM Veeam Job")
         );
       }
     }
@@ -1105,6 +1207,31 @@ export const useGlobalInfrastructureMetrics = ({
   const veeamJobs = filteredVeeam.jobs;
 
   const veeamAggregates = useMemo(() => {
+    const resolveOrg = (clientId: number | null) => {
+      if (clientId == null) {
+        return {
+          key: "unknown",
+          organizationId: "unknown",
+          organizationName: "Unknown Organization",
+        };
+      }
+
+      const org = orgMapByClientId.get(clientId);
+      if (org) {
+        return {
+          key: org.id,
+          organizationId: org.id,
+          organizationName: org.name,
+        };
+      }
+
+      return {
+        key: `unknown-${clientId}`,
+        organizationId: `unknown-${clientId}`,
+        organizationName: `Unknown Organization (${clientId})`,
+      };
+    };
+
     const ensureRow = (
       map: Map<
         string,
@@ -1167,70 +1294,21 @@ export const useGlobalInfrastructureMetrics = ({
       return { total, secondary, tertiary };
     };
 
-    const resolveOrg = (clientId: number | null) => {
-      if (clientId == null) {
-        return {
-          key: "unknown",
-          organizationId: "unknown",
-          organizationName: "Unknown Organization",
-        };
-      }
-
-      const org = orgMapByClientId.get(clientId);
-      if (org) {
-        return {
-          key: org.id,
-          organizationId: org.id,
-          organizationName: org.name,
-        };
-      }
-
-      return {
-        key: `unknown-${clientId}`,
-        organizationId: `unknown-${clientId}`,
-        organizationName: `Unknown Organization (${clientId})`,
-      };
-    };
-
     const backupMap = new Map<
       string,
-      {
-        organizationId: string;
-        organizationName: string;
-        total: number;
-        secondary: number;
-        tertiary: number;
-      }
+      { organizationId: string; organizationName: string; total: number; secondary: number; tertiary: number }
     >();
     const infrastructureMap = new Map<
       string,
-      {
-        organizationId: string;
-        organizationName: string;
-        total: number;
-        secondary: number;
-        tertiary: number;
-      }
+      { organizationId: string; organizationName: string; total: number; secondary: number; tertiary: number }
     >();
     const alarmsMap = new Map<
       string,
-      {
-        organizationId: string;
-        organizationName: string;
-        total: number;
-        secondary: number;
-        tertiary: number;
-      }
+      { organizationId: string; organizationName: string; total: number; secondary: number; tertiary: number }
     >();
     const combinedMap = new Map<
       string,
-      {
-        organizationId: string;
-        organizationName: string;
-        total: number;
-        secondary: number;
-        tertiary: number;
-      }
+      { organizationId: string; organizationName: string; total: number; secondary: number; tertiary: number }
     >();
 
     // Backup & Replication: Total / Success / Failed
@@ -1270,7 +1348,6 @@ export const useGlobalInfrastructureMetrics = ({
     const infrastructureRows = rowsFromMap(infrastructureMap);
     const alarmsRows = rowsFromMap(alarmsMap);
 
-    // Combined summary for card: merge the three section row sets
     const mergeRows = (rows: CategoryBreakdownRow[]) => {
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index];
@@ -1308,7 +1385,7 @@ export const useGlobalInfrastructureMetrics = ({
       total: combined.total,
       success: combined.secondary,
       failed: combined.tertiary,
-    }
+    };
   }, [filteredVeeam, orgMapByClientId]);
 
   const veeamDrilldownData = useMemo<GlobalVeeamDrilldownData>(
@@ -1427,7 +1504,9 @@ export const useGlobalInfrastructureMetrics = ({
         tertiary: metrics.weekly,
       });
     });
-    return rows.sort((a, b) => b.total - a.total || a.organizationName.localeCompare(b.organizationName));
+    return rows.sort(
+      (a, b) => b.total - a.total || a.organizationName.localeCompare(b.organizationName)
+    );
   }, [filteredReportsMeta, orgMapById]);
 
   const insightsBreakdown = useMemo(
