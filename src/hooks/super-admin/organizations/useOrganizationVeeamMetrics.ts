@@ -498,7 +498,7 @@ export const useOrganizationVeeamMetrics = (
                 changeSummary: metaObj.summary ?? null,
               });
 
-              console.log("[BR super-admin] Matched VMs:", matched.length, "Unprotected:", vmsWithoutJobs.length, "Orphan:", jobsWithoutVMs.length);
+              // Data mapped successfully
             } else {
               setBrData(null);
             }
