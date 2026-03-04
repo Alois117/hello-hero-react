@@ -1507,7 +1507,7 @@ export const useGlobalInfrastructureMetrics = ({
   const veeamBreakdown = useMemo(() => veeamAggregates.rows, [veeamAggregates]);
 
   return {
-    loading,
+    loading: initialLoading,
     error,
     isConnected,
     lastUpdated,
