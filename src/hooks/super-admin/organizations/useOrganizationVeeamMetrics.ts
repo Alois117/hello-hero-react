@@ -468,7 +468,7 @@ export const useOrganizationVeeamMetrics = (
               const mainObj = (arr[0] ?? {}) as UnknownRecord;
               const metaObj = (arr[1] ?? {}) as UnknownRecord;
 
-              console.log("[BR super-admin] Parsed main keys:", Object.keys(mainObj));
+              // Keys parsed successfully
 
               // Extract lists from the main object (same shape as User Dashboard)
               // Backend already scopes response by client_id (sent in POST body).
