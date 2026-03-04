@@ -731,11 +731,10 @@ export const useGlobalInfrastructureMetrics = ({
 
             setRawInsights(mapped);
           } else {
-            setRawInsights([]);
           }
-        } else {
-          setRawInsights([]);
+          // On parse failure during silent refresh, keep previous insights data
         }
+        // On fetch failure during silent refresh, keep previous insights data
 
         // Veeam Backup & Replication parsing (unchanged)
         if (veeamBackupRes?.ok) {
