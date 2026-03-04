@@ -489,9 +489,10 @@ export const useGlobalInfrastructureMetrics = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const hasLoadedOnce = useRef(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [rawAlerts, setRawAlerts] = useState<GlobalAlertItem[]>([]);
