@@ -29,7 +29,7 @@ export const WEBHOOK_BASE_URL = import.meta.env.VITE_WEBHOOK_BASE_URL || 'http:/
 
 // ─── Webhook Endpoints (each backed by its own env variable) ────────────────
 export const WEBHOOK_ALERTS_URL =
-  import.meta.env.VITE_WEBHOOK_ALERTS_URL || `${WEBHOOK_BASE_URL}/webhook/ai/insights`;
+  import.meta.env.VITE_WEBHOOK_ALERTS_URL || `${WEBHOOK_BASE_URL}/webhook/zabbix/alerts`;
 
 export const WEBHOOK_AI_INSIGHTS_URL =
   import.meta.env.VITE_WEBHOOK_AI_INSIGHTS_URL || `${WEBHOOK_BASE_URL}/webhook/agent-insights`;
