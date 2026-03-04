@@ -857,17 +857,24 @@ export const useGlobalInfrastructureMetrics = ({
 
         setIsConnected(true);
         setLastUpdated(new Date());
+        hasLoadedOnce.current = true;
       } catch (err) {
         if (!(err instanceof Error && err.name === "AbortError")) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load global infrastructure metrics"
-          );
-          setIsConnected(false);
+          if (!silent) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Failed to load global infrastructure metrics"
+            );
+          }
+          // Don't flip isConnected false during background refresh
+          if (!silent) setIsConnected(false);
         }
       } finally {
-        if (!silent) setLoading(false);
+        if (!silent) {
+          setInitialLoading(false);
+          hasLoadedOnce.current = true;
+        }
       }
     },
     [authenticatedFetch, enabled, orgMapByClientId, reportsDetailsRequested]
