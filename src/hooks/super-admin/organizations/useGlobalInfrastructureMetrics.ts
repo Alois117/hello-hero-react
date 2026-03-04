@@ -539,8 +539,8 @@ export const useGlobalInfrastructureMetrics = ({
       }
       abortControllerRef.current = new AbortController();
 
-      if (!silent) setLoading(true);
-      setError(null);
+      if (!silent) setInitialLoading(true);
+      if (!silent) setError(null);
 
       try {
         const commonPost = {
