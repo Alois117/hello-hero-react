@@ -489,9 +489,10 @@ export const useGlobalInfrastructureMetrics = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const hasLoadedOnce = useRef(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [rawAlerts, setRawAlerts] = useState<GlobalAlertItem[]>([]);
@@ -538,8 +539,8 @@ export const useGlobalInfrastructureMetrics = ({
       }
       abortControllerRef.current = new AbortController();
 
-      if (!silent) setLoading(true);
-      setError(null);
+      if (!silent) setInitialLoading(true);
+      if (!silent) setError(null);
 
       try {
         const commonPost = {
@@ -567,7 +568,7 @@ export const useGlobalInfrastructureMetrics = ({
           authenticatedFetch(WEBHOOK_VEEAM_ALARMS_URL, commonPost).catch(() => null),
         ]);
 
-        // Alerts parsing (unchanged)
+        // Alerts parsing — preserve previous data on silent refresh failure
         if (alertsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(alertsRes, WEBHOOK_ALERTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
@@ -594,14 +595,12 @@ export const useGlobalInfrastructureMetrics = ({
               };
             });
             setRawAlerts(mapped);
-          } else {
-            setRawAlerts([]);
           }
-        } else {
-          setRawAlerts([]);
+          // On parse failure during silent refresh, keep previous data (no else setRawAlerts([]))
         }
+        // On fetch failure during silent refresh, keep previous data
 
-        // Hosts parsing (unchanged)
+        // Hosts parsing — preserve previous data on silent refresh failure
         if (hostsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(hostsRes, WEBHOOK_ZABBIX_HOSTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
@@ -629,11 +628,7 @@ export const useGlobalInfrastructureMetrics = ({
               };
             });
             setRawHosts(mapped);
-          } else {
-            setRawHosts([]);
           }
-        } else {
-          setRawHosts([]);
         }
 
         // Reports parsing (unchanged)
@@ -659,16 +654,10 @@ export const useGlobalInfrastructureMetrics = ({
             } else {
               setRawReportDetails([]);
             }
-          } else {
-            setRawReportRecords([]);
-            setRawReportLiteItems([]);
-            setRawReportDetails([]);
           }
-        } else {
-          setRawReportRecords([]);
-          setRawReportLiteItems([]);
-          setRawReportDetails([]);
+          // On parse failure during silent refresh, keep previous reports data
         }
+        // On fetch failure during silent refresh, keep previous reports data
 
         // ───────────────────────────────────────────────────────────────
         // Insights parsing (UPDATED to match Organization Explorer richness)
@@ -742,11 +731,10 @@ export const useGlobalInfrastructureMetrics = ({
 
             setRawInsights(mapped);
           } else {
-            setRawInsights([]);
           }
-        } else {
-          setRawInsights([]);
+          // On parse failure during silent refresh, keep previous insights data
         }
+        // On fetch failure during silent refresh, keep previous insights data
 
         // Veeam Backup & Replication parsing (unchanged)
         if (veeamBackupRes?.ok) {
@@ -787,14 +775,12 @@ export const useGlobalInfrastructureMetrics = ({
               changes: metaObj.changes ?? null,
               changeSummary: metaObj.summary ?? null,
             });
-          } else {
-            setRawVeeamBackupData(null);
           }
-        } else {
-          setRawVeeamBackupData(null);
+          // On parse failure, keep previous veeam backup data
         }
+        // On fetch failure, keep previous veeam backup data
 
-        // Veeam Infrastructure parsing (unchanged)
+        // Veeam Infrastructure parsing
         if (veeamInfraRes?.ok) {
           const parsed = await safeParseResponse<InfraVM[]>(
             veeamInfraRes,
@@ -805,14 +791,10 @@ export const useGlobalInfrastructureMetrics = ({
               ? parsed.data
               : [parsed.data as unknown as InfraVM];
             setRawVeeamInfraVMs(vms);
-          } else {
-            setRawVeeamInfraVMs([]);
           }
-        } else {
-          setRawVeeamInfraVMs([]);
         }
 
-        // Veeam Alarms parsing (unchanged)
+        // Veeam Alarms parsing
         if (veeamAlarmsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(
             veeamAlarmsRes,
@@ -870,26 +852,29 @@ export const useGlobalInfrastructureMetrics = ({
             }
 
             setRawVeeamAlarmItems(mappedAlarms);
-          } else {
-            setRawVeeamAlarmItems([]);
           }
-        } else {
-          setRawVeeamAlarmItems([]);
         }
 
         setIsConnected(true);
         setLastUpdated(new Date());
+        hasLoadedOnce.current = true;
       } catch (err) {
         if (!(err instanceof Error && err.name === "AbortError")) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load global infrastructure metrics"
-          );
-          setIsConnected(false);
+          if (!silent) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Failed to load global infrastructure metrics"
+            );
+          }
+          // Don't flip isConnected false during background refresh
+          if (!silent) setIsConnected(false);
         }
       } finally {
-        if (!silent) setLoading(false);
+        if (!silent) {
+          setInitialLoading(false);
+          hasLoadedOnce.current = true;
+        }
       }
     },
     [authenticatedFetch, enabled, orgMapByClientId, reportsDetailsRequested]
@@ -1394,11 +1379,11 @@ export const useGlobalInfrastructureMetrics = ({
       infraVMs: filteredVeeam.infraVMs,
       alarmItems: filteredVeeam.alarmItems,
       sectionBreakdowns: veeamAggregates.sectionBreakdowns,
-      loading,
+      loading: initialLoading,
       error,
       lastUpdated,
     }),
-    [filteredVeeam, veeamAggregates, loading, error, lastUpdated]
+    [filteredVeeam, veeamAggregates, initialLoading, error, lastUpdated]
   );
 
   const summary = useMemo<GlobalMetricSummary>(
@@ -1522,7 +1507,7 @@ export const useGlobalInfrastructureMetrics = ({
   const veeamBreakdown = useMemo(() => veeamAggregates.rows, [veeamAggregates]);
 
   return {
-    loading,
+    loading: initialLoading,
     error,
     isConnected,
     lastUpdated,

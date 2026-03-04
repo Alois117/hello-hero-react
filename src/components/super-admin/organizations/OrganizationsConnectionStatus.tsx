@@ -1,9 +1,8 @@
 /**
  * Organizations Connection Status
- * Displays silent refresh indicator and last updated time
- * Mirrors the Zabbix Alerts connection status UI
+ * Stable connection indicator — never flickers during background refresh
  */
-import { Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { Wifi, WifiOff } from "lucide-react";
 import { format } from "date-fns";
 
 interface OrganizationsConnectionStatusProps {
@@ -15,13 +14,10 @@ interface OrganizationsConnectionStatusProps {
 const OrganizationsConnectionStatus = ({
   isConnected,
   lastUpdated,
-  loading = false,
 }: OrganizationsConnectionStatusProps) => {
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      {loading ? (
-        <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-      ) : isConnected ? (
+      {isConnected ? (
         <Wifi className="w-4 h-4 text-success" />
       ) : (
         <WifiOff className="w-4 h-4 text-destructive" />

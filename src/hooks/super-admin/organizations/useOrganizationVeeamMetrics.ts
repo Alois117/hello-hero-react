@@ -468,7 +468,7 @@ export const useOrganizationVeeamMetrics = (
               const mainObj = (arr[0] ?? {}) as UnknownRecord;
               const metaObj = (arr[1] ?? {}) as UnknownRecord;
 
-              console.log("[BR super-admin] Parsed main keys:", Object.keys(mainObj));
+              // Keys parsed successfully
 
               // Extract lists from the main object (same shape as User Dashboard)
               // Backend already scopes response by client_id (sent in POST body).
@@ -498,13 +498,11 @@ export const useOrganizationVeeamMetrics = (
                 changeSummary: metaObj.summary ?? null,
               });
 
-              console.log("[BR super-admin] Matched VMs:", matched.length, "Unprotected:", vmsWithoutJobs.length, "Orphan:", jobsWithoutVMs.length);
-            } else {
-              setBrData(null);
+              // Data mapped successfully
             }
-          } catch (parseErr) {
-            console.error("[BR super-admin] Parse error:", parseErr);
-            setBrData(null);
+            // On parse failure during silent refresh, keep previous BR data
+          } catch {
+            // On parse error during silent refresh, keep previous BR data
           }
         }
 
@@ -530,11 +528,9 @@ export const useOrganizationVeeamMetrics = (
               );
 
               setInfraVMs(vms as InfraVM[]);
-            } else {
-              setInfraVMs([]);
             }
           } catch {
-            /* parsing error */
+            /* parsing error — keep previous data */
           }
         }
 
@@ -603,21 +599,17 @@ export const useOrganizationVeeamMetrics = (
               });
 
               setAlarmItems(Array.from(uniqueMap.values()));
-            } else {
-              setAlarmItems([]);
             }
           } catch {
-            /* parsing error */
+            /* parsing error — keep previous data */
           }
         }
 
         setLastUpdated(new Date());
         setError(null);
       } catch (err) {
-        // Abort is not a "real error"
         if ((err as { name?: string })?.name === "AbortError") return;
 
-        console.error("[useOrganizationVeeamMetrics] Fetch error:", err);
         if (!silent) {
           setError(
             err instanceof Error ? err.message : "Failed to fetch Veeam metrics"
