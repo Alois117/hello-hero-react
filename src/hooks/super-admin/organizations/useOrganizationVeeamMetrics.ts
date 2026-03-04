@@ -499,12 +499,10 @@ export const useOrganizationVeeamMetrics = (
               });
 
               // Data mapped successfully
-            } else {
-              setBrData(null);
             }
-          } catch (parseErr) {
-            console.error("[BR super-admin] Parse error:", parseErr);
-            setBrData(null);
+            // On parse failure during silent refresh, keep previous BR data
+          } catch {
+            // On parse error during silent refresh, keep previous BR data
           }
         }
 
