@@ -608,10 +608,8 @@ export const useOrganizationVeeamMetrics = (
         setLastUpdated(new Date());
         setError(null);
       } catch (err) {
-        // Abort is not a "real error"
         if ((err as { name?: string })?.name === "AbortError") return;
 
-        console.error("[useOrganizationVeeamMetrics] Fetch error:", err);
         if (!silent) {
           setError(
             err instanceof Error ? err.message : "Failed to fetch Veeam metrics"
