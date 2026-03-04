@@ -775,14 +775,12 @@ export const useGlobalInfrastructureMetrics = ({
               changes: metaObj.changes ?? null,
               changeSummary: metaObj.summary ?? null,
             });
-          } else {
-            setRawVeeamBackupData(null);
           }
-        } else {
-          setRawVeeamBackupData(null);
+          // On parse failure, keep previous veeam backup data
         }
+        // On fetch failure, keep previous veeam backup data
 
-        // Veeam Infrastructure parsing (unchanged)
+        // Veeam Infrastructure parsing
         if (veeamInfraRes?.ok) {
           const parsed = await safeParseResponse<InfraVM[]>(
             veeamInfraRes,
@@ -793,14 +791,10 @@ export const useGlobalInfrastructureMetrics = ({
               ? parsed.data
               : [parsed.data as unknown as InfraVM];
             setRawVeeamInfraVMs(vms);
-          } else {
-            setRawVeeamInfraVMs([]);
           }
-        } else {
-          setRawVeeamInfraVMs([]);
         }
 
-        // Veeam Alarms parsing (unchanged)
+        // Veeam Alarms parsing
         if (veeamAlarmsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(
             veeamAlarmsRes,
@@ -858,11 +852,7 @@ export const useGlobalInfrastructureMetrics = ({
             }
 
             setRawVeeamAlarmItems(mappedAlarms);
-          } else {
-            setRawVeeamAlarmItems([]);
           }
-        } else {
-          setRawVeeamAlarmItems([]);
         }
 
         setIsConnected(true);
