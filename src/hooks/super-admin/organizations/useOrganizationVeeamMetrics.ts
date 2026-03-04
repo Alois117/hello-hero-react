@@ -528,11 +528,9 @@ export const useOrganizationVeeamMetrics = (
               );
 
               setInfraVMs(vms as InfraVM[]);
-            } else {
-              setInfraVMs([]);
             }
           } catch {
-            /* parsing error */
+            /* parsing error — keep previous data */
           }
         }
 
