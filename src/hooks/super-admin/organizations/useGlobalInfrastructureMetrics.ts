@@ -600,7 +600,7 @@ export const useGlobalInfrastructureMetrics = ({
         }
         // On fetch failure during silent refresh, keep previous data
 
-        // Hosts parsing (unchanged)
+        // Hosts parsing — preserve previous data on silent refresh failure
         if (hostsRes?.ok) {
           const parsed = await safeParseResponse<unknown[]>(hostsRes, WEBHOOK_ZABBIX_HOSTS_URL);
           if (parsed.ok && Array.isArray(parsed.data)) {
@@ -628,11 +628,7 @@ export const useGlobalInfrastructureMetrics = ({
               };
             });
             setRawHosts(mapped);
-          } else {
-            setRawHosts([]);
           }
-        } else {
-          setRawHosts([]);
         }
 
         // Reports parsing (unchanged)
