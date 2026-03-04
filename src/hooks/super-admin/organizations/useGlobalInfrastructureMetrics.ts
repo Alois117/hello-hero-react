@@ -654,16 +654,10 @@ export const useGlobalInfrastructureMetrics = ({
             } else {
               setRawReportDetails([]);
             }
-          } else {
-            setRawReportRecords([]);
-            setRawReportLiteItems([]);
-            setRawReportDetails([]);
           }
-        } else {
-          setRawReportRecords([]);
-          setRawReportLiteItems([]);
-          setRawReportDetails([]);
+          // On parse failure during silent refresh, keep previous reports data
         }
+        // On fetch failure during silent refresh, keep previous reports data
 
         // ───────────────────────────────────────────────────────────────
         // Insights parsing (UPDATED to match Organization Explorer richness)
