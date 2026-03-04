@@ -599,11 +599,9 @@ export const useOrganizationVeeamMetrics = (
               });
 
               setAlarmItems(Array.from(uniqueMap.values()));
-            } else {
-              setAlarmItems([]);
             }
           } catch {
-            /* parsing error */
+            /* parsing error — keep previous data */
           }
         }
 
