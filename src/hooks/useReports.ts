@@ -61,10 +61,6 @@ export const useReports = (): UseReportsReturn => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
-    from: null,
-    to: null,
-  });
 
   const { authenticatedFetch } = useAuthenticatedFetch();
 
