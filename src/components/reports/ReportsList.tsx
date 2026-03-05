@@ -42,6 +42,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
         return "bg-amber-500/20 text-amber-400 border-amber-500/30";
       case "monthly":
         return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+      case "custom":
+      case "custom_range":
+        return "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
