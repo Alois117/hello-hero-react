@@ -14,7 +14,6 @@ import {
   TrendingUp,
   CheckCircle,
   XCircle,
-  RefreshCw,
   ChevronDown,
   Activity,
 } from "lucide-react";
