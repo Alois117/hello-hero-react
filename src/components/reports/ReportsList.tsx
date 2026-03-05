@@ -59,6 +59,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
         return `Weekly Performance Summary - ${format(new Date(report.created_at), "'Week of' MMMM d")}`;
       case "monthly":
         return `Monthly Availability Report - ${format(new Date(report.created_at), "MMMM yyyy")}`;
+      case "custom":
+      case "custom_range":
+        return `Custom Report - ${dateStr}`;
       default:
         return `${report.report_type} Report - ${dateStr}`;
     }
