@@ -37,9 +37,6 @@ export interface UseReportsReturn {
   setCurrentPage: (page: number) => void;
   totalPages: number;
   pageSize: number;
-  dateRange: { from: Date | null; to: Date | null };
-  setDateRange: (range: { from: Date | null; to: Date | null }) => void;
-  fetchCustomReports: () => Promise<void>;
 }
 
 const sortReportsDescending = (reports: ReportItem[]): ReportItem[] => {
