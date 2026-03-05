@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, X, FileSearch } from "lucide-react";
+import { CalendarIcon, X, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -10,58 +10,61 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-interface CustomReportPickerProps {
-  dateRange: { from: Date | null; to: Date | null };
-  setDateRange: (range: { from: Date | null; to: Date | null }) => void;
-  onGenerate: () => void;
-  isLoading?: boolean;
+interface CustomReportGeneratorProps {
+  onGenerate: (from: Date, to: Date) => Promise<void>;
+  isGenerating: boolean;
 }
 
-const CustomReportPicker = ({
-  dateRange,
-  setDateRange,
-  onGenerate,
-  isLoading,
-}: CustomReportPickerProps) => {
+const CustomReportGenerator = ({ onGenerate, isGenerating }: CustomReportGeneratorProps) => {
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
   const [fromOpen, setFromOpen] = useState(false);
   const [toOpen, setToOpen] = useState(false);
 
-  const handleClear = () => {
-    setDateRange({ from: null, to: null });
+  const isValidRange = fromDate && toDate && fromDate <= toDate;
+
+  const handleGenerate = async () => {
+    if (!fromDate || !toDate) return;
+    await onGenerate(fromDate, toDate);
   };
 
-  const isValidRange = dateRange.from && dateRange.to && dateRange.from <= dateRange.to;
+  const handleClear = () => {
+    setFromDate(null);
+    setToDate(null);
+  };
 
   return (
     <div className="glass-card p-4 rounded-xl border border-border/50">
       <div className="flex items-center gap-2 mb-4">
         <div className="p-2 rounded-lg bg-primary/10">
-          <FileSearch className="w-4 h-4 text-primary" />
+          <Zap className="w-4 h-4 text-primary" />
         </div>
-        <h3 className="font-semibold text-sm">Custom Reports</h3>
+        <div>
+          <h3 className="font-semibold text-sm">Generate Custom Report</h3>
+          <p className="text-xs text-muted-foreground">Select a date range to generate an on-demand report</p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        {/* From Date */}
         <Popover open={fromOpen} onOpenChange={setFromOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               className={cn(
                 "w-[160px] justify-start text-left font-normal border-border/50",
-                !dateRange.from && "text-muted-foreground"
+                !fromDate && "text-muted-foreground"
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange.from ? format(dateRange.from, "PP") : "From date"}
+              {fromDate ? format(fromDate, "PP") : "From date"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="single"
-              selected={dateRange.from || undefined}
+              selected={fromDate || undefined}
               onSelect={(date) => {
-                setDateRange({ ...dateRange, from: date || null });
+                setFromDate(date || null);
                 setFromOpen(false);
               }}
               disabled={(date) => date > new Date()}
@@ -71,32 +74,31 @@ const CustomReportPicker = ({
           </PopoverContent>
         </Popover>
 
-        <span className="text-muted-foreground">to</span>
+        <span className="text-muted-foreground text-sm">to</span>
 
-        {/* To Date */}
         <Popover open={toOpen} onOpenChange={setToOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               className={cn(
                 "w-[160px] justify-start text-left font-normal border-border/50",
-                !dateRange.to && "text-muted-foreground"
+                !toDate && "text-muted-foreground"
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange.to ? format(dateRange.to, "PP") : "To date"}
+              {toDate ? format(toDate, "PP") : "To date"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="single"
-              selected={dateRange.to || undefined}
+              selected={toDate || undefined}
               onSelect={(date) => {
-                setDateRange({ ...dateRange, to: date || null });
+                setToDate(date || null);
                 setToOpen(false);
               }}
               disabled={(date) =>
-                date > new Date() || (dateRange.from ? date < dateRange.from : false)
+                date > new Date() || (fromDate ? date < fromDate : false)
               }
               initialFocus
               className="pointer-events-auto"
@@ -104,9 +106,8 @@ const CustomReportPicker = ({
           </PopoverContent>
         </Popover>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-2 ml-auto">
-          {(dateRange.from || dateRange.to) && (
+          {(fromDate || toDate) && (
             <Button
               variant="ghost"
               size="sm"
@@ -118,18 +119,27 @@ const CustomReportPicker = ({
             </Button>
           )}
           <Button
-            onClick={onGenerate}
-            disabled={!isValidRange || isLoading}
+            onClick={handleGenerate}
+            disabled={!isValidRange || isGenerating}
             className="neon-button"
             size="sm"
           >
-            {isLoading ? "Loading..." : "Generate"}
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 mr-2" />
+                Generate
+              </>
+            )}
           </Button>
         </div>
       </div>
 
-      {/* Validation Message */}
-      {dateRange.from && dateRange.to && dateRange.from > dateRange.to && (
+      {fromDate && toDate && fromDate > toDate && (
         <p className="text-xs text-destructive mt-2">
           Start date must be before end date
         </p>
@@ -138,4 +148,4 @@ const CustomReportPicker = ({
   );
 };
 
-export default CustomReportPicker;
+export default CustomReportGenerator;

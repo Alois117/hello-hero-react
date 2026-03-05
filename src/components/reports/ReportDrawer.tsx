@@ -236,6 +236,9 @@ const ReportDrawer = ({ report, isOpen, onClose }: ReportDrawerProps) => {
         return "bg-secondary/20 text-secondary border-secondary/30";
       case "monthly":
         return "bg-accent/20 text-accent border-accent/30";
+      case "custom":
+      case "custom_range":
+        return "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
