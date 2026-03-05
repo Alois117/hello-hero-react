@@ -226,9 +226,6 @@ export const useReports = (): UseReportsReturn => {
     setCurrentPage,
     totalPages,
     pageSize,
-    dateRange,
-    setDateRange,
-    fetchCustomReports,
   };
 };
 
