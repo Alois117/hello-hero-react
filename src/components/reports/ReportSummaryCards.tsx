@@ -1,19 +1,19 @@
-import { FileText, Calendar, CalendarDays, CalendarRange } from "lucide-react";
+import { FileText, Calendar, CalendarDays, CalendarRange, Zap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ReportCounts } from "@/hooks/useReports";
 
 interface ReportSummaryCardsProps {
   counts: ReportCounts;
+  customCount?: number;
 }
 
-const ReportSummaryCards = ({ counts }: ReportSummaryCardsProps) => {
+const ReportSummaryCards = ({ counts, customCount = 0 }: ReportSummaryCardsProps) => {
   const cards = [
     {
       id: "total",
       label: "Total Reports",
-      value: counts.total,
+      value: counts.total + customCount,
       icon: FileText,
-      // Zabbix-style: blue/info for totals
       bgGradient: "from-blue-500/15 to-blue-500/5",
       iconBg: "bg-blue-500/15",
       iconColor: "text-blue-400",
@@ -25,7 +25,6 @@ const ReportSummaryCards = ({ counts }: ReportSummaryCardsProps) => {
       label: "Daily Reports",
       value: counts.daily,
       icon: Calendar,
-      // Zabbix-style: green/success for daily
       bgGradient: "from-emerald-500/15 to-emerald-500/5",
       iconBg: "bg-emerald-500/15",
       iconColor: "text-emerald-400",
@@ -37,7 +36,6 @@ const ReportSummaryCards = ({ counts }: ReportSummaryCardsProps) => {
       label: "Weekly Reports",
       value: counts.weekly,
       icon: CalendarDays,
-      // Zabbix-style: amber/warning for weekly
       bgGradient: "from-amber-500/15 to-amber-500/5",
       iconBg: "bg-amber-500/15",
       iconColor: "text-amber-400",
@@ -49,20 +47,29 @@ const ReportSummaryCards = ({ counts }: ReportSummaryCardsProps) => {
       label: "Monthly Reports",
       value: counts.monthly,
       icon: CalendarRange,
-      // Zabbix-style: purple/accent for monthly
       bgGradient: "from-purple-500/15 to-purple-500/5",
       iconBg: "bg-purple-500/15",
       iconColor: "text-purple-400",
       borderColor: "border-purple-500/20",
       valueColor: "text-purple-400",
     },
+    {
+      id: "custom",
+      label: "Custom Reports",
+      value: customCount,
+      icon: Zap,
+      bgGradient: "from-cyan-500/15 to-cyan-500/5",
+      iconBg: "bg-cyan-500/15",
+      iconColor: "text-cyan-400",
+      borderColor: "border-cyan-500/20",
+      valueColor: "text-cyan-400",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
-
         return (
           <Card
             key={card.id}

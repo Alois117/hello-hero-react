@@ -55,6 +55,10 @@ export const WEBHOOK_BACKUP_REPLICATION_URL =
 export const WEBHOOK_JARVIS_ASSISTANT_URL =
   import.meta.env.VITE_WEBHOOK_JARVIS_ASSISTANT_URL || `${WEBHOOK_BASE_URL}/webhook/Jarvis-AI-Assistant`;
 
+// ─── Custom / On-Demand Reports ─────────────────────────────────────────────
+export const WEBHOOK_CUSTOM_REPORT_URL =
+  import.meta.env.VITE_WEBHOOK_CUSTOM_REPORT_URL || `${WEBHOOK_BASE_URL}/webhook/ondemand-report`;
+
 // ─── Frontend Audit Logs ────────────────────────────────────────────────────
 export const WEBHOOK_AUDIT_LOGS_URL =
   import.meta.env.VITE_WEBHOOK_AUDIT_LOGS_URL || `${WEBHOOK_BASE_URL}/webhook/avis-portal-ingest-logs`;

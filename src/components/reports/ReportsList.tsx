@@ -42,6 +42,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
         return "bg-amber-500/20 text-amber-400 border-amber-500/30";
       case "monthly":
         return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+      case "custom":
+      case "custom_range":
+        return "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
@@ -56,6 +59,9 @@ const ReportsList = ({ reports, loading, onReportClick }: ReportsListProps) => {
         return `Weekly Performance Summary - ${format(new Date(report.created_at), "'Week of' MMMM d")}`;
       case "monthly":
         return `Monthly Availability Report - ${format(new Date(report.created_at), "MMMM yyyy")}`;
+      case "custom":
+      case "custom_range":
+        return `Custom Report - ${dateStr}`;
       default:
         return `${report.report_type} Report - ${dateStr}`;
     }
