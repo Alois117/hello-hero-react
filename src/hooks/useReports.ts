@@ -164,55 +164,6 @@ export const useReports = (): UseReportsReturn => {
     [authenticatedFetch]
   );
 
-  const fetchCustomReports = useCallback(async () => {
-    if (!dateRange.from || !dateRange.to) return;
-
-    try {
-      setLoading(true);
-
-        const response = await authenticatedFetch(WEBHOOK_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: dateRange.from.toISOString(),
-            to: dateRange.to.toISOString(),
-          }),
-        });
-
-        const result = await safeParseResponse<ReportItem[]>(response, WEBHOOK_URL);
-        if (!result.ok) throw new Error(result.userMessage);
-
-        const webhookReports: ReportItem[] = Array.isArray(result.data) ? result.data : [];
-
-      const validReports = webhookReports.filter(
-        (r) =>
-          r &&
-          typeof r.report_type === "string" &&
-          typeof r.report_template === "string" &&
-          typeof r.created_at === "string"
-      );
-
-      // Normalize HTML templates (handle double-escaped content)
-      const processedReports = validReports.map((report) => ({
-        ...report,
-        report_template: normalizeHtml(report.report_template),
-      }));
-
-      const sortedReports = sortReportsDescending(processedReports);
-      setReports(sortedReports);
-      setIsConnected(true);
-      setLastUpdated(new Date());
-      setError(null);
-    } catch (err) {
-      const safe = err instanceof Error ? err.message : "We couldn't load custom reports. Please try again.";
-      console.error("[useReports] Custom fetch error:", err);
-      setError(safe);
-      setIsConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticatedFetch, dateRange]);
-
   const filteredReports = useMemo(() => {
     let result = reports;
     if (selectedType !== "all") {
