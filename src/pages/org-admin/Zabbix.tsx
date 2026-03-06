@@ -163,8 +163,9 @@ const Zabbix = () => {
             <AlertsTable
               alerts={alerts}
               loading={alertsLoading}
-              selectedSeverities={selectedSeverities}
-              showAcknowledged={showAcknowledged}
+              selectedSeverity={selectedSeverity}
+              statusFilter={statusFilter}
+              timeRange={selectedTimeRange}
               searchQuery={alertSearchQuery}
             />
           </TabsContent>

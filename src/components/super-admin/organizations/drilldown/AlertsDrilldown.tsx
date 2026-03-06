@@ -218,8 +218,9 @@ const AlertsDrilldown = ({ orgName, alerts, loading, error, onRefresh }: AlertsD
       <AlertsTable
         alerts={dashboardAlerts}
         loading={loading}
-        selectedSeverities={ALL_SEVERITIES}
-        showAcknowledged
+        selectedSeverity="all"
+        statusFilter="all"
+        timeRange="all"
         searchQuery=""
       />
     </div>
