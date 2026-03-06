@@ -3,33 +3,22 @@ import { CheckCircle, Wifi, WifiOff } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import AlertsTable from "@/components/alerts/AlertsTable";
-import AlertFilters from "@/components/alerts/AlertFilters";
+import AlertFilters, { type StatusFilter, type TimeRange } from "@/components/alerts/AlertFilters";
 import AlertSummaryCards from "@/components/alerts/AlertSummaryCards";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 
 const Alerts = () => {
-  const [selectedSeverities, setSelectedSeverities] = useState<AlertSeverity[]>([
-    "disaster",
-    "high",
-    "average",
-    "warning",
-    "info",
-  ]);
-  const [showAcknowledged, setShowAcknowledged] = useState(true);
+  const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const { alerts, loading, counts, isConnected, lastUpdated } = useAlerts();
 
-  const handleAcknowledgeAll = () => {
-    console.log("Acknowledge all alerts");
-    // TODO: Implement acknowledge all logic
-  };
-
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">Alerts</h1>
@@ -55,32 +44,29 @@ const Alerts = () => {
               )}
             </div>
           </div>
-          <Button 
-            onClick={handleAcknowledgeAll}
-            className="bg-gradient-to-r from-success to-primary hover:opacity-90 text-background"
-          >
+          <Button className="bg-gradient-to-r from-success to-primary hover:opacity-90 text-background">
             <CheckCircle className="w-4 h-4 mr-2" />
             Acknowledge All
           </Button>
         </div>
 
-        {/* 5 Summary Cards */}
         <AlertSummaryCards counts={counts} />
 
-        {/* Filters */}
-        <AlertFilters 
-          selectedSeverities={selectedSeverities}
-          onSeverityChange={setSelectedSeverities}
-          showAcknowledged={showAcknowledged}
-          onShowAcknowledgedChange={setShowAcknowledged}
+        <AlertFilters
+          selectedSeverity={selectedSeverity}
+          onSeverityChange={setSelectedSeverity}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          selectedTimeRange={selectedTimeRange}
+          onTimeRangeChange={setSelectedTimeRange}
         />
 
-        {/* Alerts Table with live data */}
-        <AlertsTable 
+        <AlertsTable
           alerts={alerts}
           loading={loading}
-          selectedSeverities={selectedSeverities}
-          showAcknowledged={showAcknowledged}
+          selectedSeverity={selectedSeverity}
+          statusFilter={statusFilter}
+          timeRange={selectedTimeRange}
           searchQuery={searchQuery}
         />
       </div>
