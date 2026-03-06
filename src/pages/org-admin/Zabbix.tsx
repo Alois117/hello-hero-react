@@ -150,10 +150,12 @@ const Zabbix = () => {
                 />
               </div>
               <AlertFilters
-                selectedSeverities={selectedSeverities}
-                onSeverityChange={setSelectedSeverities}
-                showAcknowledged={showAcknowledged}
-                onShowAcknowledgedChange={setShowAcknowledged}
+                selectedSeverity={selectedSeverity}
+                onSeverityChange={setSelectedSeverity}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                selectedTimeRange={selectedTimeRange}
+                onTimeRangeChange={setSelectedTimeRange}
               />
             </div>
 
