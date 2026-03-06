@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Table,
@@ -17,6 +17,7 @@ import AlertDetailDrawer from "./AlertDetailDrawer";
 import TableSkeleton from "@/components/loading/TableSkeleton";
 import { isItemRead, markItemRead } from "@/utils/readState";
 import { useAuth } from "@/keycloak/context/AuthContext";
+import type { StatusFilter, TimeRange } from "./AlertFilters";
 
 export interface Alert {
   id: number;
@@ -29,14 +30,12 @@ export interface Alert {
   acknowledged: boolean;
   status: "active" | "acknowledged" | "resolved";
   timestamp: string;
-  // Extended fields from webhook
   aiInsights?: string;
   timesSent?: number;
   seenCount?: number;
   firstSeen?: string;
   lastSeen?: string;
   dedupeKey?: string;
-  // Fixed: now fully optional + internal fields optional
   rawMetadata?: {
     name?: string;
     clock?: string | number;
@@ -44,24 +43,59 @@ export interface Alert {
     r_clock?: string;
     objectid?: string;
     severity?: string;
-    // Allow any extra fields from webhook (future-proof)
     [key: string]: unknown;
   };
 }
 
+/** Convert a TimeRange value to a cutoff Date (or null for "all") */
+const getTimeCutoff = (range: TimeRange): Date | null => {
+  if (range === "all") return null;
+  const now = Date.now();
+  const ms: Record<string, number> = {
+    "1h": 3_600_000,
+    "6h": 21_600_000,
+    "24h": 86_400_000,
+    "7d": 604_800_000,
+  };
+  return new Date(now - (ms[range] ?? 0));
+};
+
+/** Best-effort parse of an alert's effective timestamp in ms */
+const getAlertEpoch = (alert: Alert): number => {
+  // Prefer lastSeen (ISO string)
+  if (alert.lastSeen) {
+    const d = new Date(alert.lastSeen);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  // Then firstSeen
+  if (alert.firstSeen) {
+    const d = new Date(alert.firstSeen);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  // Then raw clock (epoch seconds)
+  const rawClock = (alert.rawMetadata as any)?.clock;
+  if (rawClock) {
+    const epoch = typeof rawClock === "number" ? rawClock : parseInt(rawClock, 10);
+    if (!isNaN(epoch)) return epoch > 1e12 ? epoch : epoch * 1000;
+  }
+  return 0;
+};
+
 interface AlertsTableProps {
   alerts?: Alert[];
   loading?: boolean;
-  selectedSeverities?: AlertSeverity[];
-  showAcknowledged?: boolean;
+  selectedSeverity?: AlertSeverity | "all";
+  statusFilter?: StatusFilter;
+  timeRange?: TimeRange;
   searchQuery?: string;
 }
 
-const AlertsTable = ({ 
-  alerts = [], 
+const AlertsTable = ({
+  alerts = [],
   loading = false,
-  selectedSeverities,
-  showAcknowledged = true,
+  selectedSeverity = "all",
+  statusFilter = "all",
+  timeRange = "all",
   searchQuery = "",
 }: AlertsTableProps) => {
   const { decodedToken } = useAuth();
@@ -73,29 +107,38 @@ const AlertsTable = ({
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const itemsPerPage = 5;
 
-  // Filter alerts based on severity, acknowledged status, and search query
-  const filteredAlerts = alerts.filter(alert => {
-    // Severity filter
-    if (selectedSeverities && selectedSeverities.length > 0) {
-      if (!selectedSeverities.includes(alert.severity)) return false;
-    }
-    
-    // Acknowledged filter
-    if (!showAcknowledged && alert.acknowledged) return false;
-    
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        alert.host.toLowerCase().includes(query) ||
-        alert.problem.toLowerCase().includes(query) ||
-        alert.category.toLowerCase().includes(query) ||
-        (alert.aiInsights?.toLowerCase().includes(query) ?? false)
-      );
-    }
-    
-    return true;
-  });
+  // ── Filtering ──
+  const filteredAlerts = useMemo(() => {
+    const timeCutoff = getTimeCutoff(timeRange);
+
+    return alerts.filter((alert) => {
+      // Severity (single-select)
+      if (selectedSeverity !== "all" && alert.severity !== selectedSeverity) return false;
+
+      // Status
+      if (statusFilter === "active" && alert.acknowledged) return false;
+      if (statusFilter === "acknowledged" && !alert.acknowledged) return false;
+
+      // Time range
+      if (timeCutoff) {
+        const epoch = getAlertEpoch(alert);
+        if (epoch > 0 && epoch < timeCutoff.getTime()) return false;
+      }
+
+      // Search
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          alert.host.toLowerCase().includes(query) ||
+          alert.problem.toLowerCase().includes(query) ||
+          alert.category.toLowerCase().includes(query) ||
+          (alert.aiInsights?.toLowerCase().includes(query) ?? false)
+        );
+      }
+
+      return true;
+    });
+  }, [alerts, selectedSeverity, statusFilter, timeRange, searchQuery]);
 
   const totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -105,16 +148,16 @@ const AlertsTable = ({
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedSeverities, showAcknowledged, searchQuery]);
+  }, [selectedSeverity, statusFilter, timeRange, searchQuery]);
 
-  // Keep page in bounds when alerts change
+  // Keep page in bounds
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
     }
   }, [totalPages, currentPage]);
 
-  // Sync read state when alerts or user changes
+  // Sync read state
   useEffect(() => {
     if (!userId || alerts.length === 0) return;
     const set = new Set<string>();
@@ -143,18 +186,14 @@ const AlertsTable = ({
         break;
       case "ArrowDown":
         e.preventDefault();
-        const nextIndex = Math.min(index + 1, currentAlerts.length - 1);
-        setFocusedRowIndex(nextIndex);
+        setFocusedRowIndex(Math.min(index + 1, currentAlerts.length - 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        const prevIndex = Math.max(index - 1, 0);
-        setFocusedRowIndex(prevIndex);
+        setFocusedRowIndex(Math.max(index - 1, 0));
         break;
       case "Escape":
-        if (drawerOpen) {
-          setDrawerOpen(false);
-        }
+        if (drawerOpen) setDrawerOpen(false);
         break;
     }
   }, [currentAlerts.length, handleRowClick, drawerOpen]);
@@ -174,7 +213,7 @@ const AlertsTable = ({
         <Search className="w-16 h-16 text-muted-foreground mb-4" />
         <h3 className="text-xl font-semibold mb-2">No Alerts Found</h3>
         <p className="text-muted-foreground mb-4">
-          {alerts.length === 0 
+          {alerts.length === 0
             ? "No alerts available from the monitoring system"
             : "No alerts match your current filter criteria"
           }
@@ -190,7 +229,7 @@ const AlertsTable = ({
           <Table role="table" aria-label="Alerts table">
             <TableHeader>
               <TableRow>
-                <TableHead role="columnheader" aria-sort="none" className="w-24">Severity</TableHead>
+                <TableHead role="columnheader" className="w-24">Severity</TableHead>
                 <TableHead role="columnheader" className="w-32 sm:w-auto">Host</TableHead>
                 <TableHead role="columnheader" className="hidden sm:table-cell">Category</TableHead>
                 <TableHead role="columnheader" className="min-w-[200px]">Problem</TableHead>
@@ -244,9 +283,7 @@ const AlertsTable = ({
                           <span className="hidden xl:inline">Acknowledged</span>
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Active
-                        </span>
+                        <span className="text-xs text-muted-foreground">Active</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()} role="cell">

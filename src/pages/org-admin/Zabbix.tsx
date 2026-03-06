@@ -33,14 +33,9 @@ const Zabbix = () => {
   const navigate = useNavigate();
 
   // Alerts state
-  const [selectedSeverities, setSelectedSeverities] = useState<AlertSeverity[]>([
-    "disaster",
-    "high",
-    "average",
-    "warning",
-    "info",
-  ]);
-  const [showAcknowledged, setShowAcknowledged] = useState(true);
+  const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "acknowledged">("all");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<"all" | "1h" | "6h" | "24h" | "7d">("all");
   const [alertSearchQuery, setAlertSearchQuery] = useState("");
 
   // Hosts state
@@ -155,10 +150,12 @@ const Zabbix = () => {
                 />
               </div>
               <AlertFilters
-                selectedSeverities={selectedSeverities}
-                onSeverityChange={setSelectedSeverities}
-                showAcknowledged={showAcknowledged}
-                onShowAcknowledgedChange={setShowAcknowledged}
+                selectedSeverity={selectedSeverity}
+                onSeverityChange={setSelectedSeverity}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                selectedTimeRange={selectedTimeRange}
+                onTimeRangeChange={setSelectedTimeRange}
               />
             </div>
 
@@ -166,8 +163,9 @@ const Zabbix = () => {
             <AlertsTable
               alerts={alerts}
               loading={alertsLoading}
-              selectedSeverities={selectedSeverities}
-              showAcknowledged={showAcknowledged}
+              selectedSeverity={selectedSeverity}
+              statusFilter={statusFilter}
+              timeRange={selectedTimeRange}
               searchQuery={alertSearchQuery}
             />
           </TabsContent>

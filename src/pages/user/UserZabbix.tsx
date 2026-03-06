@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 // Alerts imports
 import { useAlerts } from "@/hooks/useAlerts";
 import AlertsTable from "@/components/alerts/AlertsTable";
-import AlertFilters from "@/components/alerts/AlertFilters";
+import AlertFilters, { type StatusFilter, type TimeRange } from "@/components/alerts/AlertFilters";
 import AlertSummaryCards from "@/components/alerts/AlertSummaryCards";
 import { AlertSeverity } from "@/components/alerts/SeverityBadge";
 
@@ -28,15 +28,10 @@ import {
 } from "@/components/zabbix/hosts";
 
 const Zabbix = () => {
-  // Alerts State & Data
-  const [selectedSeverities, setSelectedSeverities] = useState<AlertSeverity[]>([
-    "disaster",
-    "high",
-    "average",
-    "warning",
-    "info",
-  ]);
-  const [showAcknowledged, setShowAcknowledged] = useState(true);
+  // Alerts State
+  const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("all");
   const [alertSearchQuery, setAlertSearchQuery] = useState("");
 
   const {
@@ -59,8 +54,8 @@ const Zabbix = () => {
     setSearchQuery: setHostSearchQuery,
     selectedGroup,
     setSelectedGroup,
-    statusFilter,
-    setStatusFilter,
+    statusFilter: hostStatusFilter,
+    setStatusFilter: setHostStatusFilter,
     clearFilters,
     currentPage,
     setCurrentPage,
@@ -70,9 +65,8 @@ const Zabbix = () => {
     uniqueGroups,
   } = useZabbixHosts(10);
 
-  // Check if any host filters are active
   const hasActiveHostFilters =
-    hostSearchQuery !== "" || selectedGroup !== null || statusFilter !== "all";
+    hostSearchQuery !== "" || selectedGroup !== null || hostStatusFilter !== "all";
 
   return (
     <UserLayout>
@@ -137,8 +131,8 @@ const Zabbix = () => {
             <AlertSummaryCards counts={alertCounts} />
 
             {/* Search and Filters */}
-            <div className="flex gap-3">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   placeholder="Search alerts..."
@@ -148,10 +142,12 @@ const Zabbix = () => {
                 />
               </div>
               <AlertFilters
-                selectedSeverities={selectedSeverities}
-                onSeverityChange={setSelectedSeverities}
-                showAcknowledged={showAcknowledged}
-                onShowAcknowledgedChange={setShowAcknowledged}
+                selectedSeverity={selectedSeverity}
+                onSeverityChange={setSelectedSeverity}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                selectedTimeRange={selectedTimeRange}
+                onTimeRangeChange={setSelectedTimeRange}
               />
             </div>
 
@@ -159,21 +155,20 @@ const Zabbix = () => {
             <AlertsTable
               alerts={alerts}
               loading={alertsLoading}
-              selectedSeverities={selectedSeverities}
-              showAcknowledged={showAcknowledged}
+              selectedSeverity={selectedSeverity}
+              statusFilter={statusFilter}
+              timeRange={selectedTimeRange}
               searchQuery={alertSearchQuery}
             />
           </TabsContent>
 
           {/* HOSTS TAB */}
           <TabsContent value="hosts" className="space-y-6 mt-6">
-            {/* Hosts Header */}
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
                 <p className="text-muted-foreground">
                   {hostCounts.total} monitored hosts
                 </p>
-                {/* Connection status indicator */}
                 <div className="flex items-center gap-1 text-xs">
                   {hostsConnected ? (
                     <>
@@ -187,7 +182,6 @@ const Zabbix = () => {
                     </>
                   )}
                 </div>
-                {/* Last updated timestamp */}
                 {hostsLastUpdated && (
                   <span className="text-xs text-muted-foreground">
                     Updated: {hostsLastUpdated.toLocaleTimeString()}
@@ -196,23 +190,20 @@ const Zabbix = () => {
               </div>
             </div>
 
-            {/* Summary Cards - Read-only, non-clickable */}
             <ZabbixHostsSummaryCards counts={hostCounts} />
 
-            {/* Search & Filters */}
             <ZabbixHostsFilters
               searchQuery={hostSearchQuery}
               onSearchChange={setHostSearchQuery}
               selectedGroup={selectedGroup}
               onGroupChange={setSelectedGroup}
-              statusFilter={statusFilter}
-              onStatusChange={setStatusFilter}
+              statusFilter={hostStatusFilter}
+              onStatusChange={setHostStatusFilter}
               uniqueGroups={uniqueGroups}
               onClearFilters={clearFilters}
               hasActiveFilters={hasActiveHostFilters}
             />
 
-            {/* Hosts Table with Pagination */}
             <ZabbixHostsTable
               hosts={paginatedHosts}
               loading={hostsLoading}
